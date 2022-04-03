@@ -90,6 +90,11 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
   var polyedges = try std.ArrayList([2]u32).initCapacity(allo , pts.len);
   defer polyedges.deinit();
 
+  // if bad triangle edge is unique, then add it to big polygon.
+  // First count the number of occurrences of each edge. Then add edges with count==1 to polygon.
+  var edgehash = std.AutoHashMap([2]u32,u8).init(allo); // TODO: move allocation out of loop.
+  defer edgehash.deinit();
+
 
   // MAIN LOOP OVER (nonboundary) POINTS
   for (pts[0..pts.len-3]) |p,idx_pt| {
@@ -104,12 +109,10 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
         if (g.pointInTriangleCircumcircle2d(p,tripts)) badtriangles.appendAssumeCapacity(@intCast(u32,tri_idx));        
       }
     }
-    
-    // if bad triangle edge is unique, then add it to big polygon.
-    // First count the number of occurrences of each edge. Then add edges with count==1 to polygon.
-    var edgehash = std.AutoHashMap([2]u32,u8).init(allo); // TODO: move allocation out of loop.
-    defer edgehash.deinit();
 
+    // clear the map, but don't release the memory.
+    edgehash.clearRetainingCapacity();
+    
     // count the number of occurrences of each edge in bad triangles. unique edges occur once.
     for (badtriangles.items) |tri_idx| {
       const tri = triangles.items[tri_idx].?; // we know tri_idx only refers to valid,bad triangles
@@ -150,14 +153,13 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
       // triangles.appendAssumeCapacity([3]u32{edge[0],edge[1],@intCast(u32,idx_pt)});
     }
 
-
     // if (@intToFloat(f32, triangles.items.len) > @intToFloat(f32,triangles.capacity) * 0.9) triangles.items = removeNullFromList(?[3]u32, triangles.items);
 
     // try showdelaunaystate(pts,triangles,idx_pt); // save to image
-    print("lengths of things : {d}\n", .{idx_pt});
-    print("triangles {d}\n", .{triangles.items.len});
-    print("badtriangles {d}\n", .{badtriangles.items.len});
-    print("polyedges {d}\n", .{polyedges.items.len});
+    // print("lengths of things : {d}\n", .{idx_pt});
+    // print("triangles {d}\n", .{triangles.items.len});
+    // print("badtriangles {d}\n", .{badtriangles.items.len});
+    // print("polyedges {d}\n", .{polyedges.items.len});
   
     // if (try checkDelaunay(idx_pt,pts,triangles.items)) @breakpoint();
   }
@@ -167,8 +169,10 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
   var validtriangles = try allo.alloc([3]u32 , triangles.items.len);
 
   for (triangles.items) |tri| {
-    if (tri) |vt| { // valid_triangle
-      if (vt[0]>=boundaryVert1 or vt[1]>=boundaryVert1 or vt[2]>=boundaryVert1) continue; // remove triangles containing starting points
+    // valid_triangle
+    if (tri) |vt| { 
+      // remove triangles containing starting points
+      if (vt[0]>=boundaryVert1 or vt[1]>=boundaryVert1 or vt[2]>=boundaryVert1) continue;
       validtriangles[idx_valid] = vt;
       idx_valid += 1;
     }
@@ -195,9 +199,21 @@ pub fn removeNullFromList(comptime T:type , arr:[]T) []T {
   return arr[0..idx];
 }
 
-test "basic delaunay" {
-  const nparticles = 1000;
+const process = std.process;
+
+
+// test "basic delaunay" {
+pub fn main() !void {
+
+  var arg_it = try process.argsWithAllocator(alloc);
+  _ = arg_it.skip(); // skip exe name
+
+  const npts_str = arg_it.next() orelse "100";
+  const nparticles = try std.fmt.parseUnsigned(usize, npts_str, 10);
+  // const nparticles = 1000;
+
   // 10k requires too much memory for triangles. The scaling is nonlinear.
+  // After change I can do 10k (0.9s) 20k (2.7s) 30k (6s) 40k (10s) ... 
   const verts = try alloc.alloc(Vec2, nparticles); 
   defer alloc.free(verts); // changes size when we call delaunay2d() ... 
 

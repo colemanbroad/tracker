@@ -34,6 +34,11 @@ pub fn build(b: *Builder) void {
     exe.setBuildMode(mode);
     exe.install();
 
+    // const lib = b.addStaticLibrary("track", "track.zig");
+    const lib = b.addSharedLibrary("track", "track.zig", .unversioned);
+    lib.setBuildMode(mode);
+    lib.install();
+
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
