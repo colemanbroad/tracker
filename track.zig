@@ -12,14 +12,13 @@ const PriorityQueue = std.PriorityQueue;
 const print = std.debug.print;
 const assert = std.debug.assert;
 
-const T = i32;
-
-export fn add(a : T, b : T) T {
+const NT = i32;
+export fn add(a : NT, b : NT) NT {
   return a + b;
 }
 
-export fn sum(a : [*]T, n : u32) T {
-  var tot:T = 0;
+export fn sum(a : [*]NT, n : u32) NT {
+  var tot:NT = 0;
   var i:u32 = 0;
   while (i<n) {
     tot += a[i];
@@ -38,146 +37,8 @@ var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
 
-test "build delaunay neibs and dists" {
-// pub fn main() !void {
-  print("\n\n",.{});
-
-  const na = 2001;
-  const nb = 2002;
-  // count number of out edges on A
-  var aout:[na]u8 = undefined;
-  for (aout) |*v| v.* = 0;
-  var randa:[na]Pts = undefined;
-  // for (randa) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
-  for (randa) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10};
-
-  // count number of in edges on B
-  var bin:[nb]u8 = undefined;
-  for (bin) |*v| v.* = 0;
-  var randb:[nb]Pts = undefined;
-  // for (randb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
-  for (randb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10};
-
-  // var cost:[na*nb]f32 = undefined;
-  var cost = try allocator.alloc(f32,na*nb);
-  for (cost) |*v| v.* = 0;
-  pairwise_distances(cost,randa[0..],randb[0..]);
-
-  // get delaunay triangles
-  const triangles = try del.delaunay2dal(allocator,randa[0..]);
-  defer allocator.free(triangles);
-
-  print("\n",.{});
-  for (triangles) |t,i| {
-    print("tri {} {d}\n", .{i,t});
-    if (i>20) break;
-  }
-
-  // naive O(n^2) edge representation
-  const edges = try allocator.alloc(u8, na*na);
-  defer allocator.free(edges);
-  for (edges) |*e| e.* = 0;
-  for (triangles) |t| {
-    edges[t[0]*na + t[1]] = 1;
-    edges[t[1]*na + t[0]] = 1;
-    edges[t[0]*na + t[2]] = 1;
-    edges[t[2]*na + t[0]] = 1;
-    edges[t[1]*na + t[2]] = 1;
-    edges[t[2]*na + t[1]] = 1;
-  }
-
-  // Assignment Matrix. 0 = known negative. 1 = known positive. 2 = unknown.
-  var asgn = try allocator.alloc(u8,na*nb);
-  for (asgn) |*v| v.* = 2;
-
-  // for each pair of vertices v0,v1 on a delaunay edge we have an associated cost for their translation difference
-  // we also have a cost based on the displacement v0(t),v0(t+1)
-  // we can pick a vertex at random and choose it's lowest cost match. then given that assignment we can fill in the rest.
-
-  // find lowest cost edge for va=0 and add it to asgn (greedy)
-  const best = blk: {
-    var c_min = cost[0];
-    var id:u32 = 0;
-    for (cost[0..nb]) |c,i| {
-      if (c<c_min) {
-        c_min = c;
-        id = i;
-      }
-    }
-    break :blk id;
-  };
-  asgn[0*nb + best] = 1;
-  
-  // now look through the neighbours of va=0 and recompute their costs to include strain.
-  // the strain cost only includes strain relative to neibs which have already been assigned (asgn=1) ?
-  // or should we try to add the node with the smallest lower bound ? This is the really optimistic, greedy version.
-  // We keep track of a lower bound for every assignment (which is the v(t)→ v(t+1) cost + best-case scenario for all neibs)
-  // Then we can update this lower bound as we expand the solution.
-
-  // I think I had always envisioned the solution to "spill" outwards from a single node. We would assign the nearest neighbours 
-  // first, and then proceed outwards. This involves taking out Delaunay Graph and computing a distance tree to the solved node.
-  // or, actually, it involves labeling nodes as "assigned", "unassigned", and "unassigned but with X assigned neighbours"...
-  // Then we greedily look through all nodes which share the highest number of neighbour assignments and compute a best-case cost.
-  // 
-
-  // OH NO. We need to perform this search over vb (not va), and connect backwards to the parent?
-
-  // In what order should we handle va's ?
-  // Order the nodes by the number of neighbours which have already been assigned. Those are the least uncertain.
-  // 
-
-  // recompute neighbour assignment costs given this
-  // 
-
-
-  assert(false);
-
-
-  // sort costs
-  // continue adding costs cheapest-first as long as they don't violate asgn constraints
-  // sort each row by smallest cost? then 
-
-  const PQlt = PriorityQueue(CostEdgePair, void, lessThan);
-  var queue = PQlt.init(allocator, {});
-  defer queue.deinit();
-  for (cost) |c,i| {
-    const ia = i / nb;
-    const ib = i % nb;
-    try queue.add(.{.cost=c,.ia=@intCast(u32,ia),.ib=@intCast(u32,ib)});
-  }
-
-  // greedily go through edges and add them graph iff they don't violate constraints
-
-  var count:usize = 0;
-  while (true) {
-
-    count += 1;
-    if (count == na*nb + 1) break;
-
-    const edge = queue.remove();
-    // print("Cost {}, Edge {} {}\n", edge);
-
-    if (aout[edge.ia]==2 or bin[edge.ib]==1) continue;
-    asgn[edge.ia*nb + edge.ib] = 1;
-    
-    aout[edge.ia] += 1;
-    bin[edge.ib] += 1;
-    
-    // if (count > 3*na/2) break;
-  }
-
-  for (randa) |_,i| {
-    print("{d}\n", .{asgn[i*nb..(i+1)*nb]});
-    if (i>10) break;
-  }
-}
-
-
-
-
-// pub fn main() !void {
-test "greedy min-cost tracking" {
-
+// test "strain tracking" {
+pub fn main() !void {
   print("\n\n",.{});
 
   const na = 1001;
@@ -188,7 +49,261 @@ test "greedy min-cost tracking" {
   var vb:[nb]Pts = undefined;
   for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10};
 
-  _ = try greedy_track(va[0..],vb[0..]);
+  const b2a = try strain_track(va[0..],vb[0..]);
+  defer allocator.free(b2a);
+
+  var res:[nb]i32 = undefined;
+
+  for (b2a) |a_idx,i| {
+    if (a_idx) |id| {
+      res[i] = @intCast(i32,id);
+    } else {
+      res[i] = -1;
+    }
+    print("{}→{}\n",.{i,res[i]});
+  }
+}
+
+
+const VStatusTag = enum {
+  unknown,
+  parent,
+  // divider, // TODO
+  daughter,
+  appear,
+  disappear,
+};
+
+
+export fn strain_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 {
+
+  const va_ = allocator.alloc(Pts,na) catch return -1;
+  for (va_) |*v,i| v.* = Pts{va[2*i], va[2*i+1]};
+  const vb_ = allocator.alloc(Pts,nb) catch return -1;
+  for (vb_) |*v,i| v.* = Pts{vb[2*i], vb[2*i+1]};
+
+  const b2a = strain_track(va_,vb_) catch return -1;
+  defer allocator.free(b2a);
+
+  // Write the result to RES in-place
+  for (b2a) |a_idx,i| {
+    if (a_idx) |id| {
+      res[i] = @intCast(i32,id);
+    } else {
+      res[i] = -1;
+    }
+  }
+
+  return 0;
+}
+
+pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
+
+  const na = va.len;
+  const nb = vb.len;
+
+  var va = try allocator.alloc(Pts,na);
+  defer allocator.free(va);
+
+  var vb = try allocator.alloc(Pts,nb);
+  defer allocator.free(vb);
+
+  var a_status = try allocator.alloc(VStatusTag,na);
+  defer allocator.free(a_status);
+  for (a_status) |*v| v.* = .unknown;
+
+  var b_status = try allocator.alloc(VStatusTag,nb);
+  defer allocator.free(b_status);
+  for (b_status) |*v| v.* = .unknown;
+
+  var cost = try allocator.alloc(f32,na*nb);
+  for (cost) |*v| v.* = 0;
+  pairwise_distances(Pts,cost,va[0..],vb[0..]);
+
+  var possible_edges = try allocator.alloc(u8,na*nb);
+  defer allocator.free(possible_edges);
+  for (possible_edges) |*v,i| {
+    // print("i={d} cost={d:.3}\n", .{i,cost[i]});
+    if (cost[i] < 150*150) {
+      v.* = 1;
+    } else{
+      v.* = 0;  
+    }
+  }
+
+  // get delaunay triangles
+  // FIXME 2D only for now
+  const triangles = try del.delaunay2dal(allocator,va[0..]);
+  defer allocator.free(triangles);
+
+  print("\n",.{});
+  for (triangles) |t,i| {
+    print("tri {} {d}\n", .{i,t});
+    if (i>20) break;
+  }
+
+  // Assignment Matrix. 0 = known negative. 1 = known positive. 2 = unknown.
+  // var asgn = try allocator.alloc(u8,na*nb);
+  // for (asgn) |*v| v.* = 2;
+
+  var asgn_a2b = try allocator.alloc([2]?u32,na);
+  defer allocator.free(asgn_a2b);
+  for (asgn_a2b) |*v| v.* = .{null,null};
+
+  var asgn_b2a = try allocator.alloc(?u32,nb);
+  // defer allocator.free(asgn_b2a); // RETURNED BY FUNC
+  for (asgn_b2a) |*v| v.* = null;
+
+  // Count delaunay neighbours which are known, either .parent or .disappear
+  var va_neib_count = try allocator.alloc(u8,na);
+  defer allocator.free(va_neib_count);
+  for (va_neib_count) |*v| v.* = 0;
+
+  // 
+  var delaunay_array = try allocator.alloc([8]?u32,na);
+  defer allocator.free(delaunay_array);
+  for (delaunay_array) |*v| v.* = .{null}**8; // id, id, id, id, ...
+
+
+  // Be careful. We're iterating through triangles, so we see each interior edge TWICE!
+  // This loop will de-duplicate edges.
+  // for each vertex `v` from triangle `tri` with neighbour vertex `v_neib` we loop over 
+  // all existing neibs to see if `v_neib` already exists. if it doesn't we add it.
+  // WARNING: this will break early once we hit `null`. This is fine as long as the array is front-packed like
+  // [value value value null null ...]
+
+  for (triangles) |tri| {
+    for (tri) |v,i| {
+      outer: for ([3]u32{0,1,2}) |j| {
+        if (i==j) continue;
+        const v_neib = tri[j];
+        for (delaunay_array[v]) |v_neib_existing,k| {
+          if (v_neib_existing==null) {
+            delaunay_array[v][k] = v_neib;
+            continue :outer;
+          }
+          if (v_neib_existing.?==v_neib) continue :outer ;
+        }
+      }
+    }
+  }
+
+  print("\n",.{});
+  for (delaunay_array) |da| {
+    print("{d}\n", .{da});
+  }
+
+  // for each pair of vertices v0,v1 on a delaunay edge we have an associated cost for their translation difference
+  // we also have a cost based on the displacement v0(t),v0(t+1)
+  // we can pick a vertex at random and choose it's lowest cost match. then given that assignment we can fill in the rest.
+
+  var vertQ = PriorityQueue(TNeibsAssigned, void, gt_TNeibsAssigned).init(allocator, {});
+  defer vertQ.deinit();
+  try vertQ.add(.{.idx=0 , .nneibs=0});
+
+  // Greedily make assignments for each vertex in the queue based based on minimum strain cost
+  // Select vertices by largest number of already-assigned-neighbours 
+  while (vertQ.count()>0) {
+
+    // this is the next vertex to match
+    const v = vertQ.remove();
+
+    // FIXME allow for divisions
+    switch (a_status[v.idx]) {
+      .parent => continue,
+      .disappear => continue,
+      else => {},
+    }
+
+    // find best match from among all vb based on strain costs
+    var bestcost:?f32  = null;
+    var bestidx:?usize = null;
+    for (vb) |x_vb,vb_idx| {
+
+      // easy skip if edge isn't possible
+      if (possible_edges[v.idx*nb + vb_idx]==0) continue;
+
+      if (b_status[vb_idx] == .daughter) continue;
+
+      const dx = x_vb - va[v.idx];
+      // TODO: add pairwise cost ?
+      var dx_cost:f32 = 0;
+
+      // add velgrad cost (if any exist)
+      for (delaunay_array[v.idx]) |va_neib_idx| {
+        
+        const a_idx = if (va_neib_idx) |_v| _v else continue;
+        if (a_status[a_idx] != .parent) continue;
+
+        const b_idx = asgn_a2b[a_idx][0].?;
+        const dx_va_neib = vb[b_idx] - va[a_idx];
+        dx_cost += dist(Pts, dx, dx_va_neib);
+      }
+
+      if (bestcost==null or dx_cost<bestcost.?) {
+        bestcost = dx_cost;
+        bestidx  = vb_idx;
+      }
+
+    }
+
+    // update cell status and graph relations
+    if (bestidx) |b_idx| {
+      a_status[v.idx] = .parent;
+      b_status[b_idx] = .daughter;
+      asgn_a2b[v.idx][0] = @intCast(u32,b_idx);
+      asgn_b2a[b_idx] = v.idx;
+    } else {
+      a_status[v.idx] = .disappear;
+    }
+
+    // add delaunay neibs of `v` to the PriorityQueue
+    for (delaunay_array[v.idx]) |va_neib| {
+      if (va_neib==null) continue;
+      va_neib_count[va_neib.?] += 1;
+      try vertQ.add(.{.idx=va_neib.? , .nneibs=va_neib_count[va_neib.?]});
+    }
+
+  }
+  
+  print("\n",.{});
+  print("The Assignmest Are\n", .{});
+  for (asgn_a2b) |b_idx,a_idx| {
+    print("{d}→{d} , {} \n", .{a_idx,b_idx, a_status[a_idx]});
+  }
+
+  return asgn_b2a;
+}
+
+
+
+fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
+  var max = arr[0];
+  var idx:usize = 0;
+  for (arr) |v,i| {
+    if (v>max) {
+      idx = i;
+      max = v;
+    }
+  }
+  return .{.max=max , .idx=idx};
+}
+
+
+// pub fn main() !void {
+test "greedy min-cost tracking" {
+
+  print("\n\n",.{});
+
+  const na = 1001;
+  const nb = 1002;
+
+  var va:[na]Pts3 = undefined;
+  for (va) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
+  var vb:[nb]Pts3 = undefined;
+  for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
+
+  _ = try greedy_track(Pts3,va[0..],vb[0..]);
 }
 
 
@@ -201,11 +316,11 @@ export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32) [*]i32 {
   const vb_ = allocator.alloc(Pts,nb) catch unreachable;
   for (vb_) |*v,i| v.* = Pts{vb[2*i], vb[2*i+1]};
 
-  const parents = greedy_track(va_,vb_) catch unreachable;
+  const parents = greedy_track(Pts,va_,vb_) catch unreachable;
   return parents.ptr;
 }
 
-pub fn greedy_track(va:[]Pts,vb:[]Pts) ![]i32 {
+pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
 
   const na = va.len;
   const nb = vb.len;
@@ -223,7 +338,7 @@ pub fn greedy_track(va:[]Pts,vb:[]Pts) ![]i32 {
   var cost = try allocator.alloc(f32,na*nb);
   defer allocator.free(cost);
   for (cost) |*v| v.* = 0;
-  pairwise_distances(cost,va[0..],vb[0..]);
+  pairwise_distances(T,cost,va[0..],vb[0..]);
 
   var asgn = try allocator.alloc(u8,na*nb);
   defer allocator.free(asgn);
@@ -233,13 +348,12 @@ pub fn greedy_track(va:[]Pts,vb:[]Pts) ![]i32 {
   // sort costs
   // continue adding costs cheapest-first as long as they don't violate asgn constraints
   // sort each row by smallest cost? then 
-  const PQlt = PriorityQueue(CostEdgePair, void, lessThan);
-  var queue = PQlt.init(allocator, {});
-  defer queue.deinit();
+  var edgeQ = PriorityQueue(CostEdgePair, void, lessThan).init(allocator, {});
+  defer edgeQ.deinit();
   for (cost) |c,i| {
     const ia = i / nb;
     const ib = i % nb;
-    try queue.add(.{.cost=c,.ia=@intCast(u32,ia),.ib=@intCast(u32,ib)});
+    try edgeQ.add(.{.cost=c,.ia=@intCast(u32,ia),.ib=@intCast(u32,ib)});
   }
 
 
@@ -250,7 +364,7 @@ pub fn greedy_track(va:[]Pts,vb:[]Pts) ![]i32 {
     count += 1;
     if (count == na*nb + 1) break;
 
-    const edge = queue.remove();
+    const edge = edgeQ.remove();
     // print("Cost {}, Edge {} {}\n", edge);
 
     if (aout[edge.ia]==2 or bin[edge.ib]==1) continue;
@@ -306,27 +420,35 @@ fn lessThan(context: void, a: CostEdgePair, b: CostEdgePair) std.math.Order {
 }
 
 
-
-
-
-// const Pts = [3]f32;
-const Pts = del.Vec2;
+const Pts3 = [3]f32;
+const Pts  = del.Vec2;
 
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
-fn pairwise_distances(cost:[]f32, a:[]Pts, b:[]Pts) void {
+fn pairwise_distances(comptime T:type, cost:[]f32, a:[]T, b:[]T) void {
   const na = a.len;
   const nb = b.len;
   assert(cost.len == na*nb);
   for (a) |x,i| {
     for (b) |y,j| {
-      cost[i*nb + j] = (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]);
-      // cost[i*nb + j] = (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]) + (x[2]-y[2])*(x[2]-y[2]);
+      cost[i*nb + j] = dist(T,x,y);
     }
   }
 }
 
+fn dist(comptime T:type, x:T, y:T) f32 {
+  return switch (T){
+    Pts  => (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]),
+    Pts3 => (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]) + (x[2]-y[2])*(x[2]-y[2]),
+    else => unreachable,
+  };
+}
 
+const TNeibsAssigned = struct{idx:u32,nneibs:u8};
+fn gt_TNeibsAssigned(context: void, a: TNeibsAssigned, b: TNeibsAssigned) std.math.Order {
+  _ = context;
+  return std.math.order(a.nneibs, b.nneibs);
+}
 
 
 
