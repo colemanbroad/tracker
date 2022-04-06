@@ -14,6 +14,31 @@ import os
 from glob import glob
 
 
+def strain_track(va,vb):
+  va = va.astype(np.float32)
+  vb = vb.astype(np.float32)
+  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  parents = np.zeros(len(vb), dtype=np.int32)
+  res_ = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+  # ipdb.set_trace()
+  err = lib.strain_track2d(va_ , len(va) , vb_ , len(vb) , res_)
+  if (err!=0): print("ERRORRRRRROROR")
+  return parents
+
+def greedy_track(va,vb):
+  va = va.astype(np.float32)
+  vb = vb.astype(np.float32)
+  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  parents = np.zeros(len(vb), dtype=np.int32)
+  res_ = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+  # err = lib.greedy_track2d.restype = ndpointer(dtype=ctypes.c_int32, shape=(len(vb),))
+  err = lib.greedy_track2d(va_,len(va),vb_,len(vb), res_)
+  if (err!=0): print("ERRORRRRRROROR")
+  return parents
+
+
 def loadlib():
   search_dir = "/zig-cache/o/"
   files = glob("zig-cache/o/*/libtrack.dylib")
@@ -36,13 +61,6 @@ def test_sum():
   x_1 = x.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32))
   print(a.sum(x_1, 1000))
 
-def greedy_track(va,vb):
-  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  lib.greedy_track2d.restype = ndpointer(dtype=ctypes.c_int32, shape=(len(vb),))
-  parents = lib.greedy_track2d(va_,len(va),vb_,len(vb))
-  return parents
-
 def test_greedy_track2d():
   va = np.random.rand(100,3).astype(dtype=np.float32)
   for alpha in np.arange(10):
@@ -62,15 +80,6 @@ def test_greedy_track2d_2(N):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-def strain_track(va,vb):
-  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  res = np.zeros(len(vb), dtype=np.int32)
-  res_ = res.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
-  err = lib.strain_track2d(va_ , len(va) , vb_ , len(vb) , res_)
-  if (err!=0): print("ERRORRRRRROROR")
-  return res
 
 def test_strain_track(N,viewer):
   va = 500 * np.random.rand(N,2).astype(dtype=np.float32)

@@ -13,14 +13,17 @@
 
 - [x] Fixed delaunay memory issue. Can use > 10k pts.
 - [x] python interop and DLL reloading
-- [1/2] memory management. preallocate numpy arrays.
+- [x] memory management. preallocate numpy arrays.
 - [x] greedy tracking that satisfies constraints
 - [x] greddy strain cost that grows outwards from initial guess
 - [x] make greedy tracking work in 2D/3D
 - [x] priority queue for next vertex to choose
+- [x] Evaluate actual tracking performance
 - [ ] delaunay 3D
 - [ ] replace O(n^2)-time construction of temporal edges
-- [ ] replace O(n^2)-space container for temporal edges
+- [x] replace O(n^2)-space container for temporal edges
 - [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
 - [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
 
+- [ ] vector median filter to clean up _any_ tracking
+- [ ] fast spatial nn data struct

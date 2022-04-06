@@ -57,6 +57,8 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
 
   // const pts = try gpa.allocator.realloc(_pts,_pts.len+3);
   var pts = try allo.alloc(Vec2, _pts.len+3);
+  defer allo.free(pts);
+
   for (_pts) |p,i| pts[i] = p;
   // pts.len += 3;
   // pts = try gpa.allocator.resize(pts, pts.len+3);
@@ -183,7 +185,7 @@ pub fn delaunay2dal(allo:std.mem.Allocator, _pts:[]Vec2) ![][3]u32 {
   // _ = try allo.realloc(pts,pts.len-3); // FREE extra points
   // validtriangles = validtriangles[0..idx_valid];
   validtriangles = try allo.realloc(validtriangles,idx_valid);
-  print("There were {d} valid out of / {d} total triangles. validtriangles has len={d}.\n", .{idx_valid, triangles.items.len, validtriangles.len});
+  // print("There were {d} valid out of / {d} total triangles. validtriangles has len={d}.\n", .{idx_valid, triangles.items.len, validtriangles.len});
 
   return validtriangles;
 }

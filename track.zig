@@ -65,7 +65,7 @@ pub fn main() !void {
 }
 
 
-const VStatusTag = enum {
+const VStatusTag = enum(u3) {
   unknown,
   parent,
   // divider, // TODO
@@ -73,7 +73,6 @@ const VStatusTag = enum {
   appear,
   disappear,
 };
-
 
 export fn strain_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 {
 
@@ -102,12 +101,6 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   const na = va.len;
   const nb = vb.len;
 
-  var va = try allocator.alloc(Pts,na);
-  defer allocator.free(va);
-
-  var vb = try allocator.alloc(Pts,nb);
-  defer allocator.free(vb);
-
   var a_status = try allocator.alloc(VStatusTag,na);
   defer allocator.free(a_status);
   for (a_status) |*v| v.* = .unknown;
@@ -117,30 +110,20 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   for (b_status) |*v| v.* = .unknown;
 
   var cost = try allocator.alloc(f32,na*nb);
+  defer allocator.free(cost);
   for (cost) |*v| v.* = 0;
   pairwise_distances(Pts,cost,va[0..],vb[0..]);
-
-  var possible_edges = try allocator.alloc(u8,na*nb);
-  defer allocator.free(possible_edges);
-  for (possible_edges) |*v,i| {
-    // print("i={d} cost={d:.3}\n", .{i,cost[i]});
-    if (cost[i] < 150*150) {
-      v.* = 1;
-    } else{
-      v.* = 0;  
-    }
-  }
 
   // get delaunay triangles
   // FIXME 2D only for now
   const triangles = try del.delaunay2dal(allocator,va[0..]);
   defer allocator.free(triangles);
 
-  print("\n",.{});
-  for (triangles) |t,i| {
-    print("tri {} {d}\n", .{i,t});
-    if (i>20) break;
-  }
+  // print("\n",.{});
+  // for (triangles) |t,i| {
+  //   print("tri {} {d}\n", .{i,t});
+  //   if (i>20) break;
+  // }
 
   // Assignment Matrix. 0 = known negative. 1 = known positive. 2 = unknown.
   // var asgn = try allocator.alloc(u8,na*nb);
@@ -164,6 +147,9 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   defer allocator.free(delaunay_array);
   for (delaunay_array) |*v| v.* = .{null}**8; // id, id, id, id, ...
 
+  var nn_distance_ditribution = try allocator.alloc([8]?f32,na);
+  defer allocator.free(nn_distance_ditribution);
+  for (nn_distance_ditribution) |*v| v.* = .{null}**8; // id, id, id, id, ...
 
   // Be careful. We're iterating through triangles, so we see each interior edge TWICE!
   // This loop will de-duplicate edges.
@@ -180,6 +166,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
         for (delaunay_array[v]) |v_neib_existing,k| {
           if (v_neib_existing==null) {
             delaunay_array[v][k] = v_neib;
+            nn_distance_ditribution[v][k] = dist(Pts,va[v],va[v_neib]); // squared euclidean
             continue :outer;
           }
           if (v_neib_existing.?==v_neib) continue :outer ;
@@ -188,10 +175,26 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
     }
   }
 
-  print("\n",.{});
-  for (delaunay_array) |da| {
-    print("{d}\n", .{da});
-  }
+  const avgdist = blk: {
+    var ad:f32 = 0;
+    var count:u32 = 0;
+    for (nn_distance_ditribution) |nnd| {
+      for (nnd) |dq| {
+        if (dq) |d| {
+          ad += d;
+          count += 1;
+        }
+      }
+    }
+    break :blk ad / @intToFloat(f32,count);
+  };
+
+
+
+  // print("\n",.{});
+  // for (delaunay_array) |da| {
+  //   print("{d}\n", .{da});
+  // }
 
   // for each pair of vertices v0,v1 on a delaunay edge we have an associated cost for their translation difference
   // we also have a cost based on the displacement v0(t),v0(t+1)
@@ -199,7 +202,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
 
   var vertQ = PriorityQueue(TNeibsAssigned, void, gt_TNeibsAssigned).init(allocator, {});
   defer vertQ.deinit();
-  try vertQ.add(.{.idx=0 , .nneibs=0});
+  try vertQ.add(.{.idx=50 , .nneibs=0});
 
   // Greedily make assignments for each vertex in the queue based based on minimum strain cost
   // Select vertices by largest number of already-assigned-neighbours 
@@ -220,18 +223,20 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
     var bestidx:?usize = null;
     for (vb) |x_vb,vb_idx| {
 
-      // easy skip if edge isn't possible
-      if (possible_edges[v.idx*nb + vb_idx]==0) continue;
-
+      // skip vb if already assigned
       if (b_status[vb_idx] == .daughter) continue;
 
-      const dx = x_vb - va[v.idx];
-      // TODO: add pairwise cost ?
-      var dx_cost:f32 = 0;
+      const x_va = va[v.idx];
+      const nn_cost:f32 = dist(Pts,x_va,x_vb);
 
-      // add velgrad cost (if any exist)
-      for (delaunay_array[v.idx]) |va_neib_idx| {
-        
+      // avoid long jumps
+      if (nn_cost > avgdist*2) continue;
+
+      // compute strain cost
+      const dx = x_vb - x_va;
+      var dx_cost:f32 = 0;
+      for (delaunay_array[v.idx]) |va_neib_idx| {  
+
         const a_idx = if (va_neib_idx) |_v| _v else continue;
         if (a_status[a_idx] != .parent) continue;
 
@@ -240,11 +245,27 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
         dx_cost += dist(Pts, dx, dx_va_neib);
       }
 
+      // cost=0 for first vertex in queue (no neibs). then use nearest-neib cost.
+      if (dx_cost==0) {
+        // add velgrad cost (if any exist)
+        if (v.idx==0) {
+          print("va_idx={} , vb_idx={}\n",.{v.idx,vb_idx});
+          print("bingo dog: {}\n",.{nn_cost});
+        }
+        dx_cost=nn_cost;
+      }
+
       if (bestcost==null or dx_cost<bestcost.?) {
         bestcost = dx_cost;
         bestidx  = vb_idx;
       }
 
+    }
+
+    if (v.idx==0) {
+      // print("va_idx={} , vb_idx={}\n",.{v.idx,vb_idx});
+      // print("bingo dog: {}\n",.{nn_cost});
+      print("best: {} {}\n", .{bestcost, bestidx});
     }
 
     // update cell status and graph relations
@@ -266,14 +287,45 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
 
   }
   
-  print("\n",.{});
-  print("The Assignmest Are\n", .{});
-  for (asgn_a2b) |b_idx,a_idx| {
-    print("{d}→{d} , {} \n", .{a_idx,b_idx, a_status[a_idx]});
+
+  var hist:[5]u32 = .{0}**5;
+  for (a_status) |s| {
+    hist[@enumToInt(s)] += 1;
   }
+
+  print("\n",.{});
+  print("Assignment Histogram\n", .{});
+  for (hist) |h,i| {
+    const e = @intToEnum(VStatusTag,i);
+    print("{s}→{d}\n", .{@tagName(e), h});
+  }
+
+
+  // print("The Assignments are...\n", .{});
+  // for (asgn_a2b) |b_idx,a_idx| {
+  //   print("{d}→{d} , {} \n", .{a_idx,b_idx, a_status[a_idx]});
+  // }
 
   return asgn_b2a;
 }
+
+test "greedy Strain Tracking 2D" {
+
+  print("\n\n",.{});
+
+  const na = 101;
+  const nb = 102;
+
+  var va:[na]Pts = undefined;
+  for (va) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
+  var vb:[nb]Pts = undefined;
+  for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
+
+  const b2a = try strain_track(va[0..],vb[0..]);
+  defer allocator.free(b2a);
+}
+
+
 
 
 
@@ -291,7 +343,7 @@ fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
 
 
 // pub fn main() !void {
-test "greedy min-cost tracking" {
+test "greedy min-cost tracking 3D" {
 
   print("\n\n",.{});
 
@@ -303,22 +355,44 @@ test "greedy min-cost tracking" {
   var vb:[nb]Pts3 = undefined;
   for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
 
-  _ = try greedy_track(Pts3,va[0..],vb[0..]);
+  const parents = try greedy_track(Pts3,va[0..],vb[0..]);
+  defer allocator.free(parents);
+}
+
+test "greedy min-cost tracking 2D" {
+
+  print("\n\n",.{});
+
+  const na = 101;
+  const nb = 102;
+
+  var va:[na]Pts = undefined;
+  for (va) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
+  var vb:[nb]Pts = undefined;
+  for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
+
+  const parents = try greedy_track(Pts,va[0..],vb[0..]);
+  defer allocator.free(parents);
 }
 
 
 
+export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 {
 
-export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32) [*]i32 {
-
-  const va_ = allocator.alloc(Pts,na) catch unreachable;
+  const va_ = allocator.alloc(Pts,na) catch return -1;
   for (va_) |*v,i| v.* = Pts{va[2*i], va[2*i+1]};
-  const vb_ = allocator.alloc(Pts,nb) catch unreachable;
+  const vb_ = allocator.alloc(Pts,nb) catch return -1;
   for (vb_) |*v,i| v.* = Pts{vb[2*i], vb[2*i+1]};
 
-  const parents = greedy_track(Pts,va_,vb_) catch unreachable;
-  return parents.ptr;
+  const parents = greedy_track(Pts,va_,vb_) catch return -1;
+  defer allocator.free(parents);
+
+  for (parents) |p,i| res[i] = p;
+
+  return 0;
 }
+
+
 
 pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
 
@@ -395,10 +469,6 @@ pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
 
   return parents;
 
-  // for (va) |_,i| {
-  //   print("{d}\n", .{asgn[i*nb..(i+1)*nb]});
-  //   if (i>10) break;
-  // }
 }
 
 
