@@ -41,7 +41,7 @@ pub fn matFromVecs(v0:[3]f32,v1:[3]f32,v2:[3]f32) Mat3x3 {
   return Mat3x3{v0[0],v0[1],v0[2],v1[0],v1[1],v1[2],v2[0],v2[1],v2[2]};
 }
 
-test "matrix inverse" {
+test "geometry. matrix inverse" {
   // const mA = [9]f32{1,2,0,0,1,0,0,0,1}; // checked against julia 
   const mA = [9]f32{1,2,-9,4,1,-2,3,3,0}; // checked against julia
   print("\n\n{d}\n\n", .{invert3x3(mA)});
@@ -128,7 +128,7 @@ pub fn intersectRayAABB(ray:Ray, box:Ray) struct{pt0:?Vec3 , pt1:?Vec3} {
   // else {return null;}
 }
 
-test "Axis aligned bounding box intersection test" {
+test "geometry. Axis aligned bounding box intersection test" {
   // fn testAxisAlignedBoundingBox() !void {
   print("\n",.{});
   {
@@ -209,7 +209,7 @@ pub fn intersectRayFace(ray:Ray, face:Face) struct{b:f32,c:f32,pt:Vec3} {
   return .{.b=abc[1], .c=abc[2], .pt=intersectionPoint2};
 }
 
-test "Intersect Ray with (arbitrary) Face" {
+test "geometry. Intersect Ray with (arbitrary) Face" {
   const r1 = Ray{.pt0=.{0,0,0}, .pt1=.{1,1.5,1.5}};
   const f1 = Face{.pt0=.{5,0,0},.pt1=.{0,5,0},.pt2=.{0,0,5}};
   const x0 = intersectRayFace(r1,f1);
@@ -373,7 +373,7 @@ pub fn pointInTriangleCircumcircle2d(pt:Vec2 , tri:[3]Vec2) bool {
   if (dot2(delta,delta) <= r2) return true else return false;
 }
 
-test "test point in circumcircle" {
+test "geometry. test point in circumcircle" {
 
   const t1 = Vec2{0,0};
   const t2 = Vec2{0,5};
@@ -394,7 +394,7 @@ test "test point in circumcircle" {
 }
 
 
-test "fuzz circumcircle" {
+test "geometry. fuzz circumcircle" {
 
   var count:u32 = 0;
 
@@ -441,7 +441,7 @@ test "fuzz circumcircle" {
 }
 
 
-test "test point in triange" {
+test "geometry. test point in triange" {
   // pub fn main() void {
   const t1 = Vec2{0,0};
   const t2 = Vec2{0,5};
@@ -484,7 +484,7 @@ pub fn cross(a:Vec3, b:Vec3) Vec3{
               a[0] * b[1] - a[1] * b[0],};
 }
 
-test "cross()" {
+test "geometry. cross()" {
   {const a = Vec3{1,0,0};
   const b = Vec3{0,1,0};
   print("\n{d:.3}",.{cross(a,b)});}
@@ -552,7 +552,7 @@ pub fn matMatMul(matL:[9]f32, matR:[9]f32) [9]f32 {
               };
 }
 
-test "matrix multiplication" {
+test "geometry. matrix multiplication" {
    const a = Vec3{0.5125063146216244, 0.161090383449368, 0.5436574027867314};
    const A1 =  [9]f32{ 0.943902  ,  0.775719 , 0.931731 ,0.0906212 ,  0.178994 , 0.729976, 0.00516308 , 0.572436 , 0.217663 };
    const A2 =  [9]f32{0.117929 ,  0.637452 , 0.395997, 0.0014168 , 0.442474 ,0.450939, 0.970842  , 0.382466 , 0.57684};
@@ -585,7 +585,7 @@ pub fn rotYawPitchRoll(yaw:f32,pitch:f32,roll:f32) [9]f32 {
 
 const pi = 3.14159265359;
 
-test "rotYawPitchRoll()" {
+test "geometry. rotYawPitchRoll()" {
   var i:u32 = 0;
   while (i<100):(i+=1) {
     const rv = normalize(randNormalVec3());
@@ -612,7 +612,7 @@ pub fn rotateCwithRotorAB(vc:Vec3,va:Vec3,vb:Vec3) Vec3 {
   return res;
 }
 
-test "asin()" {
+test "geometry. asin()" {
   print("\n asin(1)={} ", .{std.math.asin(@as(f32,1.0))}); // 1.57079637 = π/2
   print("\n asin(-1)={}", .{std.math.asin(@as(f32,-1.0))}); // -1.57079637 = -π/2
   print("\n asin(0)={} ", .{std.math.asin(@as(f32,0.0))}); // 0
@@ -646,7 +646,7 @@ pub fn testRodriguezRotation() !void {
     }}
 }
 
-test "rodriguez rotations" {
+test "geometry. rodriguez rotations" {
   try testRodriguezRotation();
 }
 

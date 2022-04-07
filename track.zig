@@ -309,7 +309,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   return asgn_b2a;
 }
 
-test "greedy Strain Tracking 2D" {
+test "track. greedy Strain Tracking 2D" {
 
   print("\n\n",.{});
 
@@ -328,7 +328,6 @@ test "greedy Strain Tracking 2D" {
 
 
 
-
 fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
   var max = arr[0];
   var idx:usize = 0;
@@ -343,7 +342,7 @@ fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
 
 
 // pub fn main() !void {
-test "greedy min-cost tracking 3D" {
+test "track. greedy min-cost tracking 3D" {
 
   print("\n\n",.{});
 
@@ -359,7 +358,7 @@ test "greedy min-cost tracking 3D" {
   defer allocator.free(parents);
 }
 
-test "greedy min-cost tracking 2D" {
+test "track. greedy min-cost tracking 2D" {
 
   print("\n\n",.{});
 
