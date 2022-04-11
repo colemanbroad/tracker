@@ -10,60 +10,67 @@ const random = prng.random();
 const Allocator = std.mem.Allocator;
 var allocator = std.testing.allocator;
 
-const x0 =     random.float(f32)*100.0;
-const y0 =     random.float(f32)*100.0;
+const x0 = random.float(f32)*100.0;
+const y0 = random.float(f32)*100.0;
 
 const Vec2 = geo.Vec2;
 const clipi = geo.clipi;
 
 const Range = geo.Range;
 
-test {std.testing.refAllDecls(@This());}
-
-test "spatial. bin random points onto 2D grid" {
-  var xs:[100]f32 = undefined;
-  for (xs) |*v| v.* = random.float(f32)*100.0;
-  var ys:[100]f32 = undefined;
-  for (ys) |*v| v.* = random.float(f32)*100.0;
-
-  var grid = try im.Img2D(u8).init(10,10);
-  defer grid.deinit();
-
-  for (xs) |x,i| {
-
-    const y = ys[i];
-    const nx = @floatToInt(usize, x/10);
-    const ny = @floatToInt(usize, y/10);
-
-    grid.img[nx*10 + ny] += 1;
-  }
-
-  var rgba = try im.Img2D([4]u8).init(10,10);
-  defer rgba.deinit();
-
-  for (grid.img) |g,i| {
-    const r = @intCast(u8, (@intCast(u16,g)*10)%255);
-    rgba.img[i] = .{r,r,r,255};
-  }
-  try im.saveRGBA(rgba,"spatial.tga");
-
+const test_home = @import("tester.zig").test_path ++ "spatial/";
+const mkdirIgnoreExistsAbsolute = @import("tester.zig").mkdirIgnoreExistsAbsolute;
+test {
+  try mkdirIgnoreExistsAbsolute(test_home);
+  std.testing.refAllDecls(@This());
 }
 
+// test "spatial. bin random points onto 2D grid" {
+
+//   var xs:[100]f32 = undefined;
+//   for (xs) |*v| v.* = random.float(f32)*100.0;
+//   var ys:[100]f32 = undefined;
+//   for (ys) |*v| v.* = random.float(f32)*100.0;
+
+//   var grid = try im.Img2D(u8).init(10,10);
+//   defer grid.deinit();
+
+//   for (xs) |x,i| {
+
+//     const y = ys[i];
+//     const nx = @floatToInt(usize, x/10);
+//     const ny = @floatToInt(usize, y/10);
+
+//     grid.img[nx*10 + ny] += 1;
+//   }
+
+//   var rgba = try im.Img2D([4]u8).init(10,10);
+//   defer rgba.deinit();
+
+//   for (grid.img) |g,i| {
+//     const r = @intCast(u8, (@intCast(u16,g)*10)%255);
+//     rgba.img[i] = .{r,r,r,255};
+//   }
+//   try im.saveRGBA(rgba , test_home ++ "spatial.tga");
+// }
+
 test "spatial. GridHash" {
+
   var pts:[100]Vec2 = undefined;
   for (pts) |*v| v.* = .{random.float(f32)*100.0 , random.float(f32)*100.0};
 
   var gh = try GridHash.init(allocator,10,10,6,pts[0..],null);
   defer gh.deinit();
-  for (pts) |p,i| {
-    print("{}→{d}\n",.{i,gh.neibs(p)}); 
+  for (pts) |p| {
+    _ = gh.neibs(p);
+    // print("{}→{d}\n",.{i,gh.neibs(p)}); 
   }
+
 }
 
 
 const geo = @import("geometry.zig");
 const BBox = geo.BBox;
-
 
 /// Points in 2D are placed into bins on a grid.
 /// The grid bins each spatial dimension and we remember a simple affine coordinate transformation for the bounds
@@ -83,7 +90,7 @@ const GridHash = struct {
     const Self = @This();
     const Elem = ?u16;
     const SetRoot = u16;
-    const IdsDists = struct{ids:[]u16 , dists:[]f32};
+    const IdsDists = struct{ids:[]u16 , dists:[]f32 , n_ids:*usize};
 
     map: []Elem,
     nx: u32,
@@ -193,18 +200,18 @@ const GridHash = struct {
 
     // first search pairwise in grid, then if need more points expand to surroundings.
     // search all boxes within `radius` of `p`
-    pub fn nnRadius(self:Self, al:Allocator, p:Vec2, radius:f32) !IdsDists {
+    pub fn nnRadius(self:Self, res:IdsDists, p:Vec2, radius:f32) !void {
 
       const ix_min = x2grid(p[0]-radius , self.bb.x , self.nx);
       const ix_max = x2grid(p[0]+radius , self.bb.x , self.nx);
       const iy_min = x2grid(p[1]-radius , self.bb.y , self.ny);
       const iy_max = x2grid(p[1]+radius , self.bb.y , self.ny);
 
-      const nx = ix_max-ix_min+1;
-      const ny = iy_max-iy_min+1;
+      // const nx = ix_max-ix_min+1;
+      // const ny = iy_max-iy_min+1;
 
-      var nn_ids = try al.alloc(u16,nx*ny*self.nelemax);
-      var dists  = try al.alloc(f32,nx*ny*self.nelemax);
+      var nn_ids = res.ids;
+      var dists  = res.dists;
 
       var nn_count:usize = 0;
       var xid = ix_min;
@@ -229,14 +236,17 @@ const GridHash = struct {
             nn_count += 1;
           }
         }
+
       }
       }
+
+      res.n_ids.* = nn_count;
 
       // remove undefined regions
-      nn_ids = al.shrink(nn_ids,nn_count);
-      dists = al.shrink(dists,nn_count);
+      // nn_ids = al.shrink(nn_ids,nn_count);
+      // dists = al.shrink(dists,nn_count);
+      // return IdsDists{.ids=nn_ids , .dists=dists};
 
-      return IdsDists{.ids=nn_ids , .dists=dists};
     }
 };
 
@@ -246,6 +256,7 @@ const pairwise_distances = @import("track.zig").pairwise_distances;
 // pub fn main() !void {
 
 test "spatial. radius neibs" {
+
   const N = 5_000;
   var pts:[N]Vec2 = undefined;
   for (pts) |*v| v.* = .{random.float(f32)*100.0 , random.float(f32)*100.0};
@@ -256,15 +267,24 @@ test "spatial. radius neibs" {
   const pairdist = try pairwise_distances(allocator,Vec2,pts[0..],pts[0..]);
   defer allocator.free(pairdist);
 
-  for (pts) |p,i| {
-    const s = try gh.nnRadius(allocator,p,1.0);
-    defer allocator.free(s.ids);
-    defer allocator.free(s.dists);
+  // Prealloc idx and dist memory for fast multiple queries
+  var ids  = try allocator.alloc(u16,200);
+  defer allocator.free(ids);
+  var dists = try allocator.alloc(f32,200);
+  defer allocator.free(dists);
+  var n_ids:usize = 200;
+  var res = GridHash.IdsDists{.ids=ids , .dists=dists , .n_ids=&n_ids};
 
-    // print("{d}\n", .{s.ids});
+  // Prealloc pdneibs buffer;
+  var buf = try allocator.alloc(u16,200);
+  defer allocator.free(buf);
+
+  for (pts) |p,i| {
+    try gh.nnRadius(res,p,1.0);
+    var res_view = res.ids[0..res.n_ids.*]; // leave res.ids length const. Change size of view.
+
 
     const pdneibs = blk: {
-      var buf = try allocator.alloc(u16,N);
       var count:u16 = 0;
       for (pts) |_,j| {
         if (pairdist[i*N + j] < 1.0) {
@@ -272,17 +292,26 @@ test "spatial. radius neibs" {
           count += 1;
         }
       }
-      buf = allocator.shrink(buf,count);
-      break :blk buf;
+      break :blk buf[0..count];
     };
-    std.sort.sort(u16,s.ids, {}, comptime std.sort.asc(u16));
+  
+    // Now compare the results
+    std.sort.sort(u16,res_view, {}, comptime std.sort.asc(u16));
     // print("{d}...{d}\n", .{pdneibs,s.ids});
-    try std.testing.expect(std.mem.eql(u16, pdneibs, s.ids));
+    std.testing.expect(std.mem.eql(u16, pdneibs, res_view)) catch {
+      print("\n\nERROR\n\npd={d} , res.ids={d}\n\n",.{pdneibs,res_view});
+      unreachable;
+    };
   }
 }
 
-// test "spatial. radius speed test" {
-pub fn main() !void {
+// pub fn main() !void {
+test "spatial. radius speed test" {
+
+  var alltimes:[4][6]i128 = undefined;
+
+  for (alltimes) |*timez| {
+
   const N = 5_000;
   var pts:[N]Vec2 = undefined;
   for (pts) |*v| v.* = .{random.float(f32)*100.0 , random.float(f32)*100.0};
@@ -290,46 +319,93 @@ pub fn main() !void {
   var qpts:[N]Vec2 = undefined;
   for (qpts) |*v| v.* = .{random.float(f32)*100.0 , random.float(f32)*100.0};
 
-  const t0 = std.time.milliTimestamp();
+  const t0 = std.time.nanoTimestamp();
 
   const sqrtN = @floatToInt(u16,@sqrt(@intToFloat(f32,N)));
   var gh = try GridHash.init(allocator,sqrtN,sqrtN,20,pts[0..],null);
   defer gh.deinit();  
 
-  const t1 = std.time.milliTimestamp();
+  const t1 = std.time.nanoTimestamp();
+
+  // Prealloc idx and dist memory for fast multiple queries
+  var idx  = try allocator.alloc(u16,200);
+  defer allocator.free(idx);
+  var dist = try allocator.alloc(f32,200);
+  defer allocator.free(dist);
+  var n_ids:usize = 200;
+  var res = GridHash.IdsDists{.ids=idx , .dists=dist , .n_ids=&n_ids};
+
+  const t1a = std.time.nanoTimestamp();
 
   for (qpts) |q| {
-    const s = try gh.nnRadius(allocator,q,1.0);
-    defer allocator.free(s.ids);
-    defer allocator.free(s.dists);
+    _ = try gh.nnRadius(res,q,1.0);
   }
 
-  const t2 = std.time.milliTimestamp();
+  const t2 = std.time.nanoTimestamp();
 
-  const pairdist = try pairwise_distances(allocator,Vec2,pts[0..],pts[0..]);
-  defer allocator.free(pairdist);
+  // const pairdist = try pairwise_distances(allocator,Vec2,pts[0..],pts[0..]);
+  // defer allocator.free(pairdist);
 
-  const t3 = std.time.milliTimestamp();
+  const t3 = std.time.nanoTimestamp();
 
-  for (qpts) |_,i| {
+  var buf = try allocator.alloc(u16,200);
+  defer allocator.free(buf);
+
+  for (qpts) |q| {
     _ = blk: {
-      var buf = try allocator.alloc(u16,N);
       var count:u16 = 0;
-      for (pts) |_,j| {
-        if (pairdist[i*N + j] < 1.0) {
+      for (pts) |p,j| {
+        // if (pairdist[i*N + j] < 1.0) {
+        const dx = q-p;
+        const pq_dist = @sqrt(@reduce(.Add,dx*dx));
+        if (pq_dist < 1.0) {
+          // print("pqd = {}   ", .{pq_dist});
           buf[count] = @intCast(u16,j);
           count += 1;
         }
       }
-      buf = allocator.shrink(buf,count);
+      // buf = allocator.shrink(buf,count);
       break :blk buf;
-    }; 
+    };
+    // defer allocator.free(neibs);
   }
 
-  const t4 = std.time.milliTimestamp();
+  const t4 = std.time.nanoTimestamp();
+  const times = .{t0-t0,t1-t0,t1a-t0,t2-t0,t3-t0,t4-t0};
+  timez.* = times;
+  }
 
-  const times = .{t0-t0,t1-t0,t2-t0,t3-t0,t4-t0};
-  print("\n\ntimings...{d}\n", .{times});
+  print("\nTiming\n",.{});
+  for (alltimes) |_,i|{
+    print("\n", .{});
+    for (alltimes[0]) |_,j|{
+      const t = @intToFloat(f32,alltimes[i][j]) / 1e6;
+      print("{d:.3} ",.{t});
+    }
+  }
+
+  // var mean:[5]f32 = undefined;
+  // for (alltimes) |_,i| {
+  // for (alltimes[0]) |_,j| {
+  //     mean[i] += alltimes[i][j];
+  // }
+  // }
+  // for (mean) |*v,i| v.* /= alltimes[0].len;
+
+  // var stddev:[5]f32 = undefined;
+  // for (alltimes) |_,i| {
+  // for (alltimes[0]) |_,j| {
+  //     const x = alltimes[i][j] - mean[i];
+  //     std[i] += x*x;
+  // }
+  // }
+
+  // stddev[i] 
+  // for (stddev) |*s,i| s.* -= mean[i]*mean[i];
+
+  // print("\n\ntimings...{d}\n", .{alltimes});
+  // print("\n\nmean...{d}\n", .{mean});
+  // print("\n\nstd...{d}\n", .{stddev});
 }
 
 
