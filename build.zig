@@ -13,10 +13,23 @@ pub fn build(b: *Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("track", "track.zig");
+    // const exe = b.addExecutable("track", "track.zig");
+    const exe = b.addExecutable("imageToys", "imageToys.zig");
+    exe.addIncludePath("tracy/");
+    exe.addIncludePath(".");
+
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
+
+    const tracy = b.addExecutable("tracy", "tracy/TracyClient.cpp");
+    tracy.addIncludePath("tracy/");
+
+    tracy.setTarget(target);
+    tracy.setBuildMode(mode);
+    tracy.install();
+
+
 
     // const lib = b.addStaticLibrary("track", "track.zig");
     const lib = b.addSharedLibrary("track", "track.zig", .unversioned);
@@ -31,4 +44,23 @@ pub fn build(b: *Builder) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+}
+
+fn linkOpenCL(b: *Builder, exe : *LibExeObjStep) void {
+    const mode = b.standardReleaseOptions();
+    exe.setBuildMode(mode);
+    exe.addIncludeDir("opencl-headers");
+    // exe.addIncludeDir("./src/");
+    exe.linkSystemLibrary("c");
+
+    if (std.builtin.os.tag == .windows) {
+        std.debug.warn("Windows detected, adding default CUDA SDK x64 lib search path. Change this in build.zig if needed...");
+        exe.addLibPath("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.1/lib/x64");
+    } else if (std.builtin.os.tag == .macos) {
+        exe.linkFramework("OpenCL");
+    } else {
+        exe.linkSystemLibrary("OpenCL");
+    }
+    
+    if (exe.kind != .Test) exe.install();
 }

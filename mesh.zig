@@ -14,9 +14,6 @@ const draw = @import("drawing.zig");
 const drawPoints3DMovie = draw.drawPoints3DMovie;
 const drawMesh3DMovie2 = draw.drawMesh3DMovie2;
 
-// const Vec3 = 
-// const BoxPoly = 
-// const count = 
 
 pub const BoxPoly = struct {
     vs:[8]Vec3 ,
@@ -75,7 +72,6 @@ pub const BoxPoly = struct {
   }
 };
 
-
 // faces are composed of 4 vertices
 pub const Mesh = struct {
 
@@ -91,7 +87,8 @@ pub const Mesh = struct {
   }
 };
 
-
+pub const Range = struct{hi:f32,lo:f32};
+pub const BBox  = struct{x:Range,y:Range};
 
 // Generate a rectangular grid polygon 
 pub fn gridMesh(nx:u32,ny:u32) !Mesh {

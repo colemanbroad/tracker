@@ -2,25 +2,25 @@ const std = @import("std");
 const im = @import("imageBase.zig");
 const cc = @import("./c.zig");
 const geo = @import("geometry.zig");
-const mesh = @import("mesh.zig");
+// const mesh = @import("mesh.zig");
 
 const Img2D = im.Img2D;
 
 const toys = @import("imageToys.zig");
-const Mesh              = mesh.Mesh;
+const Mesh              = geo.Mesh;
 const inbounds          = toys.inbounds;
 const sphereTrajectory  = toys.sphereTrajectory;
 const rotate2cam        = toys.rotate2cam;
 const PerspectiveCamera = toys.PerspectiveCamera;
 
 const bounds3 = geo.bounds3;
-const gridMesh = mesh.gridMesh;
+const gridMesh = geo.gridMesh;
 const vec2 = geo.vec2;
 const abs = geo.abs;
 
 const Vec3 = geo.Vec3;
 // const cc = geo.cc;
-const mkdirIgnoreExists = toys.mkdirIgnoreExists;
+const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
 const uvec2 = geo.uvec2;
 const Vec2 = geo.Vec2;
 const fillImg2D = toys.fillImg2D;
@@ -81,7 +81,6 @@ pub fn drawPoints3DMovie(pts:[]Vec3, name:[]const u8) !void {
 
   }
 }
-
 
 // render a 3D surface from a spiral trajectory
 pub fn drawMesh3DMovie2(surf:Mesh, name:[]const u8) !void {
@@ -235,6 +234,11 @@ pub fn faceZOrder(vertices:[]Vec3 , faces:[][4]u32) ![]u32 {
   return indices;
 }
 
+// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
+// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
+// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
+
+
 pub fn drawLine(comptime T:type , img:Img2D(T) , _x0:u31 , _y0:u31 , x1:u31 , y1:u31 , val:T) void {
 
   var x0:i32 = _x0;
@@ -289,14 +293,11 @@ pub fn drawLineInBounds(comptime T:type , img:Img2D(T) , _x0:i32 , _y0:i32 , x1:
   }
 }
 
-
-
 test "drawing. draw a simple yellow line" {
   const pic = try Img2D([4]u8).init(600,400);
   drawLine([4]u8 , pic , 10, 0 , 500 , 100 , .{0,255,255,255});
   try im.saveRGBA(pic,"testeroo.tga");
 }
-
 
 pub fn drawCircle(comptime T: type, pic:Img2D(T), x0:i32, y0:i32, r:i32, val:T) void {
   var idx:i32 = 0;
@@ -311,8 +312,6 @@ pub fn drawCircle(comptime T: type, pic:Img2D(T), x0:i32, y0:i32, r:i32, val:T) 
       }
   }
 }
-
-
 
 // just a 1px circle outline. tested with delaunay circumcircles.
 pub fn drawCircleOutline(pic:Img2D([4]u8), xm:i32, ym:i32, _r:i32, val:[4]u8) void
@@ -361,6 +360,8 @@ pub fn drawCircleOutline(pic:Img2D([4]u8), xm:i32, ym:i32, _r:i32, val:[4]u8) vo
       }                                           //  /* e_xy+e_x > 0 or no 2nd y-step */
    }
 }
+
+
 
 
 // ignore Z-dim and faces for now... just plotvertices and edges using XY 
@@ -415,7 +416,7 @@ test "drawing. make a grid lattice in B&W and color" {
   for (imgu8) |_,i| imgu8[i] = if (img.img[i]>0) 1 else 0;
   const res = try fillImg2D(imgu8,img.nx,img.ny);
   for (res.img) |*v| v.* = v.* % 999;
-  const res2 = try randomColorLabels(u16,res.img);
+  const res2 = try randomColorLabels(allocator,u16,res.img);
   try im.saveU8AsTGA(res2,@intCast(u16,img.ny),@intCast(u16,img.nx),"surface_colored.tga");
 }
 

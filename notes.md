@@ -26,4 +26,12 @@
 - [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
 
 - [ ] vector median filter to clean up _any_ tracking
-- [ ] fast spatial nn data struct
+- [ ] fast spatial nn data struct. grid hash. 
+- [ ] locality hash would work well for sparsely distributed cells in 3D, e.g. cells on surface of Tribolium.
+- [ ] StarryNite
+- [ ] Fast Matching
+
+
+# Questions
+
+- [ ] how to use dynamic / static `.a` or `.dylib` lib from zig ? 

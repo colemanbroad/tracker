@@ -1,10 +1,13 @@
 const std = @import("std");
 const im = @import("imageBase.zig");
 
-const cc = @import("c.zig");
-const geo = @import("geometry.zig");
+const cc   = @import("c.zig");
+const geo  = @import("geometry.zig");
 const draw = @import("drawing.zig");
-const mesh = @import("mesh.zig");
+// const mesh = @import("mesh.zig");
+
+const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
+
 
 const Vec2 = geo.Vec2;
 const Vec3 = geo.Vec3;
@@ -24,22 +27,32 @@ const normalize = geo.normalize;
 const intersectRayAABB = geo.intersectRayAABB;
 const cross = geo.cross;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = gpa.allocator();
+// var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+// var allocator = gpa.allocator();
+var allocator = std.testing.allocator;
+const Allocator = std.mem.Allocator;
+
 var prng = std.rand.DefaultPrng.init(0);
 const rando = prng.random();
 
 const Vector = std.meta.Vector;
-const BoxPoly = mesh.BoxPoly;
+const BoxPoly = geo.BoxPoly;
 
 const Img2D = im.Img2D;
 const Img3D = im.Img3D;
 
+// const testDirBase = "test-artifacts/";
+
+
+
+
+
+test {std.testing.refAllDecls(@This());}
 
 // Projections and Cameras and Rendering
 
 /// Orthographic projection along z.
-pub fn orthProj(comptime T: type, image: Img3D(T)) ![]T {
+pub fn orthProj(allo:Allocator, comptime T: type, image: Img3D(T)) ![]T {
   const nz = image.nz;
   const ny = image.ny;
   const nx = image.nx;
@@ -54,7 +67,7 @@ pub fn orthProj(comptime T: type, image: Img3D(T)) ![]T {
 
     // Poject over Z. Order of dimensions is Z,Y,X. So X is fast and Z is slow.
     0 => {
-      var res = try allocator.alloc(T, ny * nx);
+      var res = try allo.alloc(T, ny * nx);
       const nxy = nx * ny;
 
       z = 0;
@@ -91,7 +104,7 @@ test "imageToys. test orthProj()" {
 
   // Initialize memory to 0. Set bresenham global state.
   var img = try allocator.alloc(u8, nz * ny * nx);
-  defer allocator.free(img);
+  defer allocator.free(img); // WARNING: we put this slice into an Img3D later. Usually we call deinit(), but here we free.
   for (img) |*v| v.* = 0;
 
   // Generate 100 random 3D star shapes. We include boundary conditions here! This is
@@ -116,7 +129,8 @@ test "imageToys. test orthProj()" {
 
   // Now let's project the image down to 2D and save it.
   var image = Img3D(u8){.img=img,.nx=200,.ny=100,.nz=76};
-  const res = try orthProj(u8, image);
+  const res = try orthProj(allocator, u8, image);
+  defer allocator.free(res);
   try im.saveU8AsTGAGrey(res, 100, 200, "testOrthProj.tga");
 }
 
@@ -322,10 +336,11 @@ test "imageXXXToys. render stars with perspectiveProjection2()"{
   try mkdirIgnoreExists("renderStarsWPerspective");
   print("\n",.{});
 
-  var img = try randomStars();
+  var img = try randomStars(allocator);
   defer allocator.free(img.img); // FIXME
 
   var nameStr = try std.fmt.allocPrint(allocator, "renderStarsWPerspective/img{:0>4}.tga", .{0});
+  defer allocator.free(nameStr);
 
   const traj = sphereTrajectory();
   
@@ -337,6 +352,7 @@ test "imageXXXToys. render stars with perspectiveProjection2()"{
     // print("\n{d}",.{camPt});  
     // const camPt = Vec3{400,50,50};
     var cam2 = try PerspectiveCamera.init(camPt, .{0,0,0}, 401, 301, null,);
+    defer cam2.deinit();
 
     perspectiveProjection2(img,&cam2);
 
@@ -351,7 +367,6 @@ test "imageXXXToys. render stars with perspectiveProjection2()"{
 }
 
 
-
 /// Max projection with perspective (pure Zig)
 /// Poject over Z. Order of dimensions is Z,Y,X. So X is fast and Z is slow.
 /// IMPORTANT: We're dealing with multiple coordinate systems here. Don't confuse them.
@@ -359,7 +374,7 @@ test "imageXXXToys. render stars with perspectiveProjection2()"{
 /// 2. The ZYX coordinates of the transpormed perspective space (z=[imagePlane, background] y=[-1,1], x=[-1,1]) (we loop over Z).
 /// 3. The ZYX real space (orthonormal) coordinates 
 /// 4. The XYZ integer coordinates of the input image
-pub fn perspectiveProjection(comptime T: type, image:Img3D(T), nyOut:u32, nxOut:u32, camPt_:Vec3 ) ![]f32 {
+pub fn perspectiveProjection(allo:Allocator, comptime T: type, image:Img3D(T), nyOut:u32, nxOut:u32, camPt_:Vec3 ) ![]f32 {
 
   // print("\nminmax: {d}\n", .{im.minmax(f32, image.img)});
 
@@ -388,7 +403,7 @@ pub fn perspectiveProjection(comptime T: type, image:Img3D(T), nyOut:u32, nxOut:
 
 
   // Store result of projection in `res`
-  var res = try allocator.alloc(f32, nyOut * nxOut);
+  var res = try allo.alloc(f32, nyOut * nxOut);
   for (res) |*v| v.* = 0;
 
   // Loop over the projection screen. For each pixel in the screen we cast a ray out along `z` in the screen coordinates,
@@ -493,16 +508,17 @@ pub fn perspectiveProjection(comptime T: type, image:Img3D(T), nyOut:u32, nxOut:
   return res;
 }
 
-test "imageToys. render stars with perspectiveProjection()" {
+test "imageXXXToys. render stars with perspectiveProjection()" {
 
   try mkdirIgnoreExists("renderStarsWPerspectiveV1");
 
   print("\n",.{});
 
   // Build a 2x2x2 image with the pixel values 1..8 
-  var img = try randomStars();
+  var img = try randomStars(allocator);
   defer allocator.free(img.img); // FIXME
   var nameStr = try std.fmt.allocPrint(allocator, "renderStarsWPerspectiveV1/img{:0>4}.tga", .{0}); // filename
+  defer allocator.free(nameStr); // FIXME
 
   const traj = sphereTrajectory();
   
@@ -512,7 +528,9 @@ test "imageToys. render stars with perspectiveProjection()" {
     const camPt = traj[i*10]*@splat(3, i_*4/10 + 1);
 
     // const res = try perspectiveProjectionBasic(f32, img, 200, 400, 2*3.14159*i_/20);
-    const res = try perspectiveProjection(f32, img, 200, 400, camPt);
+    const res = try perspectiveProjection(allocator, f32, img, 200, 400, camPt);
+    defer allocator.free(res);
+
     nameStr = try std.fmt.bufPrint(nameStr, "renderStarsWPerspectiveV1/img{:0>4}.tga", .{i});
     print("{s}\n", .{nameStr});
     try im.saveF32AsTGAGreyNormed(res, 200, 400, nameStr);
@@ -826,6 +844,8 @@ test "imageToys. test all PerspectiveCamera transformations" {
   // }
   // pub fn camTest() !void {
   var cam = try PerspectiveCamera.init(.{100,100,100}, .{50,50,50}, 401, 301, null, );
+  defer cam.deinit();
+
   print("\n",.{});
 
   try expect( @reduce(.And, cam.world2cam(cam.loc) == Vec3{0,0,0}) );
@@ -885,6 +905,7 @@ test "imageToys. Rotating Spiral w world2pix()" {
   const pts = sphereTrajectory();
 
   var nameStr = try allocator.alloc(u8,40);
+  defer allocator.free(nameStr);
 
   var k:u32 = 0;
   while (k<100):(k+=1){
@@ -896,6 +917,7 @@ test "imageToys. Rotating Spiral w world2pix()" {
                   301, // need an odd number of pixel s.t. x,y=0,0 maps to pixel 200,150.
                   null,
                   );
+    defer cam.deinit();
 
     const nx = cam.nxPixels;
     const ny = cam.nyPixels;
@@ -970,7 +992,7 @@ pub fn fitbox(verts:[][2]f32 , nx:u32 , ny:u32) void {
   const ywidth  = @intToFloat(f32,ny) - 2*yborder;
 
   // const mima = minmax(verts);
-  const mima = im.bounds2(verts);
+  const mima = geo.bounds2(verts);
   const mi = mima[0];
   const ma = mima[1];
 
@@ -1003,7 +1025,7 @@ pub fn fitboxiso(verts:[][2]f32 , nx:u32 , ny:u32) void {
   const yborder = 0.05 * @intToFloat(f32,ny);
   const ywidth  = @intToFloat(f32,ny) - 2*yborder;
 
-  const mima = im.bounds2(verts);
+  const mima = geo.bounds2(verts);
   const mi = mima[0];
   const ma = mima[1];
   const xrenorm = xwidth / (ma[0]-mi[0]);
@@ -1024,9 +1046,9 @@ pub fn fitboxiso(verts:[][2]f32 , nx:u32 , ny:u32) void {
 
 
 
-// IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS
-// IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS
-// IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS  IMAGE FILTERS
+// IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS
+// IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS
+// IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS 🌇 IMAGE FILTERS
 
 // XY format . TODO: ensure inline ?
 pub inline fn inbounds(img:anytype , px:anytype) bool {
@@ -1039,6 +1061,7 @@ fn minfilter(img:Img2D(f32)) !void {
   // const ny = img.ny;
   const s = img.img; // source
   const t = try allocator.alloc(f32,s.len); // target
+  defer allocator.free(t);
   const deltas = [_]Vector(2,i32){ .{-1,0} , .{0,1} , .{1,0} , .{0,-1} ,.{0,0}};
 
   for (s) |_,i| {
@@ -1066,6 +1089,7 @@ fn blurfilter(img:Img2D(f32)) !void {
   // const ny = img.ny;
   const s = img.img; // source
   const t = try allocator.alloc(f32,s.len); // target
+  defer allocator.free(t);
   const deltas = [_]Vector(2,i32){ .{-1,0} , .{0,1} , .{1,0} , .{0,-1} ,.{0,0}};
 
   for (s) |_,i| {
@@ -1089,9 +1113,6 @@ fn blurfilter(img:Img2D(f32)) !void {
 
 
 
-
-
-
 test "imageToys. bitsets" {
   // pub fn main() !void {
 
@@ -1107,16 +1128,6 @@ test "imageToys. bitsets" {
   }
 }
 
-
-
-const Str = []const u8;
-
-pub fn mkdirIgnoreExists(dirname:Str) !void {
-  std.fs.cwd().makeDir(dirname) catch |e| switch (e) {
-    error.PathAlreadyExists => {},
-    else => return e ,
-  };
-}
 
 
 // to create a stream plot we need to integrate a bunch of points through the vector field.
@@ -1200,13 +1211,16 @@ test "imageToys. various stream plots" {
 
 
   var name = try allocator.alloc(u8,40);
+  defer allocator.free(name);
   var time:[200]f32 = undefined;
   // for (time) |*v,i| v.* = @intToFloat(f32,i) / 100;
   const dt = Vec2{0.002,0.002};
 
   var ptscopy = try allocator.alloc(Vec2 , pts.len);
+  defer allocator.free(ptscopy);
   for (ptscopy) |*p,i| p.* = pts[i];
   var nextpts = try allocator.alloc(Vec2 , pts.len);
+  defer allocator.free(nextpts);
   for (nextpts) |*p,i| p.* = pts[i];
 
   for (time) |_,j| {
@@ -1307,16 +1321,17 @@ pub const RGBA = packed struct {
   }
 };
 
-const Mesh = mesh.Mesh;
+const Mesh = geo.Mesh;
 
 test "imageToys. render soccerball with occlusion" {
 // pub fn main() !void {
   var box = BoxPoly.createAABB(.{3,3,3} , .{85,83,84});
   var a = box.vs.len; var b = box.es.len; var c = box.fs.len; // TODO: FIXME: I shouldn't have to do this just to convert types....
   const surf1 = Mesh{.vs=box.vs[0..a] , .es=box.es[0..b] , .fs=box.fs[0..c]};
-  const surf2 = try mesh.subdivideMesh(surf1 , 3);
+  const surf2 = try geo.subdivideMesh(surf1 , 3);
   defer surf2.deinit();
 
+  try mkdirIgnoreExists("soccerball");
   try draw.drawMesh3DMovie2(surf2 , "soccerball/img");
 }
 
@@ -1363,9 +1378,9 @@ test "imageToys. drawPoints2D() Spiral" {
 
 
 
-pub fn random2DMesh(nx:f32,ny:f32) !struct{verts:[]Vec2 , edges:std.ArrayListUnmanaged([2]u32)} {
-  const verts = try allocator.alloc(Vec2,100);
-  var edges = try std.ArrayListUnmanaged([2]u32).initCapacity(allocator, 1000); // NOTE: we must use `var` for edges here, even though it's referring to slices on the heap? how?
+pub fn random2DMesh(allo:Allocator, nx:f32,ny:f32) !struct{verts:[]Vec2 , edges:std.ArrayListUnmanaged([2]u32)} {
+  const verts = try allo.alloc(Vec2,100);
+  var edges = try std.ArrayListUnmanaged([2]u32).initCapacity(allo, 1000); // NOTE: we must use `var` for edges here, even though it's referring to slices on the heap? how?
 
   for (verts) |*v,i| {
     const x = rando.float(f32) * nx;
@@ -1385,7 +1400,9 @@ pub fn random2DMesh(nx:f32,ny:f32) !struct{verts:[]Vec2 , edges:std.ArrayListUnm
 
 test "imageToys. random mesh" {
   const pic = try Img2D([4]u8).init(800,800);
-  var msh = try random2DMesh(800,800);
+  var msh = try random2DMesh(allocator,800,800);
+  defer allocator.free(msh.verts);
+  defer msh.edges.deinit(allocator);
 
   for (msh.edges.items) |e| {
     const x0 = @floatToInt(u31, msh.verts[e[0]][0] );
@@ -1399,11 +1416,11 @@ test "imageToys. random mesh" {
 
 // img volume filled with stars. img shape is 50x100x200 .ZYX
 // WARNING: must free() Img3D.img field 
-pub fn randomStars() !Img3D(f32) {
+pub fn randomStars(allo:Allocator) !Img3D(f32) {
 
   var img = blo:
   {
-    var data  = try allocator.alloc(f32, 50*100*200);
+    var data  = try allo.alloc(f32, 50*100*200);
     for (data) |*v| v.* = 0;
     var img3d = Img3D(f32) {
         .img = data,
@@ -1455,6 +1472,7 @@ test "imageToys. Perlin noise (improved)" {
   // pub fn main() !void {
 
   var noise = try allocator.alloc(f32,512*512);
+  defer allocator.free(noise);
   for (noise) |*v,i| {
     const x = @intToFloat(f64, i/512) / 2;
     const y = @intToFloat(f64, i%512) / 2;
@@ -1860,7 +1878,8 @@ pub fn fillImg2D(img:[]u8, nx:u32, ny:u32) !struct{img:[]u16, maxLabel:u16} {
   var currentLabel:?u16 = null;
   var currentMax:u16 = 0;
 
-  var dj = try DisjointSets.init(64_000);
+  var dj = try DisjointSets.init(allocator,64_000);
+  defer dj.deinit();
   // var map = std.AutoHashMap(u16,u16).init(allocator);
   // defer map.deinit();
 
@@ -1953,13 +1972,15 @@ test "imageToys. color square grid with fillImg2D()" {
 
   // label the empty 0-valued spaces between bezier crossings
   var imgu8 = try allocator.alloc(u8, nx*ny);
+  defer allocator.free(imgu8);
   for (imgu8) |*v,i| v.* = @intCast(u8, img[i]);
   const _res = try fillImg2D(imgu8, @intCast(u16,nx) , @intCast(u16,ny) );
+  defer allocator.free(_res.img);
   const res = _res.img;
   const maxLabel = _res.maxLabel;
   print("MaxLabel = {}\n", .{maxLabel});
 
-  try printPixelValueCounts(res);
+  // try printPixelValueCounts(res);
 
   // std.sort.sort(u16 , res , {} , comptime std.sort.asc(u16)); // block sort
   // print("\n{d}\n",.{res[res.len-100..]});
@@ -1993,13 +2014,18 @@ const DisjointSets = struct {
 
     map : []Elem,
     nElems : usize,
+    allo : Allocator,
 
-    pub fn init(n:usize) !This {
+    pub fn init(allo:Allocator,n:usize) !This {
         // const _map = try allocator.alloc(Node, ids.len);
         const _map = try allocator.alloc(Elem, n);
         // All elements are in their own set to start off.
         for (_map) |*v| v.* = rootParent;
-        return This{.map=_map, .nElems=n};
+        return This{.map=_map, .nElems=n, .allo=allo};
+    }
+
+    pub fn deinit(self:This) void {
+      self.allo.free(self.map);
     }
 
     // Double the number of labels in the total set. [Uses 👇 allocator.resize()]
@@ -2041,13 +2067,16 @@ const DisjointSets = struct {
         }
     }
 
+
+
     // TODO: Implement a function to create Sets of Values (instead of returning the SetRoot). Should be more efficient than iterating find() over all keys.
 };
 
 
 test "imageToys. DisjointSets datastructure basics" {
   // fn testDisjointSets() !void {
-  var dj = try DisjointSets.init(1000);
+  var dj = try DisjointSets.init(allocator,1000);
+  defer dj.deinit();
   print("{}\n", .{dj.find(5)});
   _ = dj.merge(5,9);
   _ = dj.merge(3,8);
@@ -2063,11 +2092,11 @@ test "imageToys. DisjointSets datastructure basics" {
 
 
 // remap each element in the greyscale array to a random RGB value (returned array is 4x size)
-pub fn randomColorLabels(comptime T:type, lab:[]T) ![]u8 {
+pub fn randomColorLabels(allo:Allocator,comptime T:type, lab:[]T) ![]u8 {
 
   const mima = im.minmax(T,lab);
-  var rgbmap = try allocator.alloc(u8, 3 * (@intCast(u16,mima[1]) + 1) );
-  defer allocator.free(rgbmap);
+  var rgbmap = try allo.alloc(u8, 3 * (@intCast(u16,mima[1]) + 1) );
+  defer allo.free(rgbmap);
   for (rgbmap) |*v| v.* = rando.int(u8);
 
   // map 0 to black
@@ -2077,7 +2106,7 @@ pub fn randomColorLabels(comptime T:type, lab:[]T) ![]u8 {
   rgbmap[3] = 255;
 
   // make new recolored image
-  var rgbImg = try allocator.alloc(u8, 4*lab.len);
+  var rgbImg = try allo.alloc(u8, 4*lab.len);
   for (lab) |*v,i| {
     const l  = 3 * @intCast(u16,v.*);
     rgbImg[4*i + 0] = rgbmap[l + 0];
@@ -2118,11 +2147,15 @@ pub fn printPixelValueCounts(img: []u16) !void{
   }}
 }
 
+// const tracy = @import("tracylib.zig");
 
 // 2D disk sampling. caller owns returned memory.
 // pub fn random2DPoints(npts:u32) ![]Vec2 {
-// pub fn main() !void {
-test "imageToys. 2d stratified sampling and radial distribution function" {
+pub fn main() !void {
+// test "imageToys. 2d stratified sampling and radial distribution function" {
+
+  // const t = tracy.trace(@src(), null);
+  // defer t.end();
 
   const npts:u32 = 120*100;
   const img = try Img2D([4]u8).init(1200,1000);
@@ -2131,7 +2164,7 @@ test "imageToys. 2d stratified sampling and radial distribution function" {
   for (img.img) |*v| v.* = .{0,0,0,255};
 
   var pts = try allocator.alloc(Vec2, npts);
-
+  defer allocator.free(pts);
 
   {var i:u32=0; 
     while (i<npts) : (i+=1) {
@@ -2234,9 +2267,9 @@ pub fn radialDistribution(pts:[]Vec2) !void {
 
 
 
-// USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM 
-// USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM 
-// USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM USES 👇 BRESHENHAM 
+// USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM
+// USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM
+// USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM 👇 USES BRESHENHAM
 
 test "imageToys. render BoxPoly and filled cube" {
 
@@ -2244,8 +2277,8 @@ test "imageToys. render BoxPoly and filled cube" {
 
   // const poly = mesh.BoxPoly.createAABB(.{0,0,0} , .{10,12,14});
   var cam = try PerspectiveCamera.init(.{100,100,100}, .{5,5,5}, 401, 301, null,);
-  // var name = try allocator.alloc(u8,40);
-  // const container = Img2D(f32){.img=cam.screen , .nx=cam.nxPixels , .ny=cam.nyPixels};
+  defer cam.deinit();
+
   var nx:u32=401; var ny:u32=301;
 
   cc.bres.init(&cam.screen[0],&ny,&nx);
@@ -2258,7 +2291,8 @@ test "imageToys. render BoxPoly and filled cube" {
     .ny  = 12,
     .nz  = 10,
   };
-  
+  defer allocator.free(img.img);
+
   for (img.img) |*v,i| v.* = @intToFloat(f32,i);
 
   // print("minmax cam screen: {d}\n", .{im.minmax(f32,img.img)});
@@ -2324,6 +2358,7 @@ test "imageToys. spinning lorenz attractor" {
   const focus = (bds[1] + bds[0]) / Vec3{2,2,2};
   const spin = sphereTrajectory();
   var name = try allocator.alloc(u8,40);
+  defer allocator.free(name);
   for (spin) |campt,j| {
 
     // project from 3d->2d with perspective, draw lines in 2d, then save
@@ -2367,8 +2402,6 @@ pub fn randomBezierCurves(img:*Img2D(f32) , ncurves:u16) void {
 }
 
 test "imageToys. color random Bezier curves with fillImg2D()" {
-  // fn testFillImg2D() !void {
-  // print("\n", .{});
 
   var nx: u32 = 1900;
   var ny: u32 = 1024;
@@ -2393,14 +2426,17 @@ test "imageToys. color random Bezier curves with fillImg2D()" {
 
   // label the empty 0-valued spaces between bezier crossings
   var imgu8 = try allocator.alloc(u8, nx*ny);
+  defer allocator.free(imgu8);
   for (imgu8) |*v,i| v.* = @floatToInt(u8, img[i]);
   const _res = try fillImg2D(imgu8, @intCast(u16,nx) , @intCast(u16,ny) );
+  defer allocator.free(_res.img);
+
   const res = _res.img;
   const maxLabel = _res.maxLabel;
   print("MaxLabel = {}\n", .{maxLabel});
 
   // try countPixelValues(res);
-  try printPixelValueCounts(res);
+  // try printPixelValueCounts(res);
 
   // std.sort.sort(u16 , res , {} , comptime std.sort.asc(u16)); // block sort
   // print("\n{d}\n",.{res[res.len-100..]});
@@ -2409,7 +2445,7 @@ test "imageToys. color random Bezier curves with fillImg2D()" {
   for (imgu8) |*v,i| v.* = @intCast(u8, res[i]%256);
   // try im.saveU8AsTGAGrey(allocator, imgu8, @intCast(u16, ny), @intCast(u16, nx), "fill_curve.tga");
 
-  const rgbImg = try randomColorLabels(u8, imgu8);
+  const rgbImg = try randomColorLabels(allocator, u8, imgu8);
   defer allocator.free(rgbImg);
 
   try im.saveU8AsTGA(rgbImg, @intCast(u16,ny), @intCast(u16,nx), "rgbFillImg.tga");

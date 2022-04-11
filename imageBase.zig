@@ -8,6 +8,16 @@ const Allocator = std.mem.Allocator;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator:Allocator = gpa.allocator();
 
+const dir_mkdirIgnoreExists = @import("tester.zig").dir_mkdirIgnoreExists;
+
+test {
+  const testdir = @import("tester.zig").cwd;
+  try dir_mkdirIgnoreExists(testdir,"imageBase/");
+  const testdir_local = try testdir.openDir("imageBase/",.{});
+  try testdir_local.setAsCwd();
+  std.testing.refAllDecls(@This());
+  // try testdir.setAsCwd();
+}
 
 pub fn Img2D(comptime T:type) type {
   return struct {
@@ -74,6 +84,7 @@ test "imageBase. Img3D Generic" {
   const a2 = try Img3D(f32).init(50,100,200); // comptime
   print("{}{}", .{a1.nx , a2.nx});
 }
+
 
 
 pub fn minmax(comptime T : type, arr : []T, ) [2]T {
@@ -235,7 +246,7 @@ test "imageBase. saveU8AsTGAGrey" {
     var grey = std.mem.zeroes([1 << 10]u8);
     for (grey) |*v, i| v.* = @intCast(u8, i % 256);
     print("\n number ;;; {} \n", .{1 << 5});
-    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 5, "testArtifacts/correct.tga");
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 5, "correct.tga");
     print("\n", .{});
 }
 
@@ -246,7 +257,7 @@ test "imageBase. saveU8AsTGAGrey (h & w too small)" {
     var grey = std.mem.zeroes([1 << 10]u8);
     for (grey) |*v, i| v.* = @intCast(u8, i % 256);
     print("\n number ;;; {} \n", .{1 << 6});
-    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 4, "testArtifacts/height_width_too_small.tga");
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 4, "height_width_too_small.tga");
     print("\n", .{});
 }
 
@@ -257,7 +268,7 @@ test "imageBase. saveU8AsTGAGrey (h & w too big)" {
     var grey = std.mem.zeroes([1 << 10]u8);
     for (grey) |*v, i| v.* = @intCast(u8, i % 256);
     print("\n number ;;; {} \n", .{1 << 6});
-    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 6, "testArtifacts/height_width_too_big.tga");
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 6, "height_width_too_big.tga");
     print("\n", .{});
 }
 
@@ -275,6 +286,6 @@ test "imageBase. saveU8AsTGA" {
         break :bl @intCast(u8,x);
         };
     // const x = @intCast(u8, i % 256); // alpha channel changes too!
-    try saveU8AsTGA(&rgba, 1 << 5, 1 << 5, "testArtifacts/multicolor.tga");
+    try saveU8AsTGA(&rgba, 1 << 5, 1 << 5, "multicolor.tga");
     print("\n", .{});
 }

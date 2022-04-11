@@ -1,6 +1,7 @@
 
 pub const bres = @cImport({
     @cInclude("bresenham_all.c");
+    // @cInclude("tracy/Tracy.hpp");
 });
 
 // pub const cl = @cImport({

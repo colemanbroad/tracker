@@ -12,6 +12,8 @@ const PriorityQueue = std.PriorityQueue;
 const print = std.debug.print;
 const assert = std.debug.assert;
 
+const Allocator = std.mem.Allocator;
+
 const NT = i32;
 export fn add(a : NT, b : NT) NT {
   return a + b;
@@ -31,7 +33,16 @@ export fn sum(a : [*]NT, n : u32) NT {
 // HOWTO: load 'lib.a' ?
 // const del = @import("/Users/broaddus/Desktop/projects-personal/zig/zig-opencl-test/src/libdelaunay.a");
 
-const del = @import("delaunay.zig");
+const del  = @import("delaunay.zig");
+const draw = @import("drawing.zig");
+const toys = @import("imageToys.zig");
+const im   = @import("imageBase.zig");
+
+var cwd = std.fs.cwd();
+
+test {std.testing.refAllDecls(@This());}
+
+// const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
 
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
@@ -41,13 +52,15 @@ const random = prng.random();
 pub fn main() !void {
   print("\n\n",.{});
 
-  const na = 1001;
-  const nb = 1002;
+  const na = 101;
+  const nb = 101;
 
   var va:[na]Pts = undefined;
   for (va) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10};
   var vb:[nb]Pts = undefined;
-  for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10};
+  for (vb) |*v,i| v.* = .{va[i][0]+random.float(f32)*0.5 + 1, va[i][1]+random.float(f32)*0.5};
+
+  // try mkdirIgnoreExists("strain");
 
   const b2a = try strain_track(va[0..],vb[0..]);
   defer allocator.free(b2a);
@@ -96,10 +109,73 @@ export fn strain_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 
   return 0;
 }
 
+
+pub fn minmaxPts(arr:[]Pts) [4]f32 {
+  var min_x:f32 = 1e8;
+  var min_y:f32 = 1e8;
+  var max_x:f32 = -1e8;
+  var max_y:f32 = -1e8;
+  for (arr) |p| {
+    if (p[0]<min_x) min_x = p[0];
+    if (p[0]>max_x) max_x = p[0];
+    if (p[1]<min_y) min_y = p[1];
+    if (p[1]>max_y) max_y = p[1];
+  }
+  return .{min_x,min_y,max_x,max_y};
+}
+
+
+const min = std.math.min;
+const max = std.math.max;
+
+fn ask_user() !i64 {
+    const stdin = std.io.getStdIn().reader();
+    const stdout = std.io.getStdOut().writer();
+
+    var buf: [10]u8 = undefined;
+    
+    try stdout.print("Press 0 to quit: ", .{});
+
+    if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
+        const res = std.fmt.parseInt(i64, user_input, 10) catch return 1;
+        if (res==0) return 0;
+    }
+    return 1;
+}
+
 pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
+
+  // const stdin = std.io.getStdIn();
 
   const na = va.len;
   const nb = vb.len;
+
+  var pic = try im.Img2D([4]u8).init(900,900);
+  defer pic.deinit();
+
+  const corners  = blk: {
+    const cA = minmaxPts(va);
+    const cB = minmaxPts(vb);
+    break :blk [4]f32{min(cA[0],cB[0]) , min(cA[1],cB[1]) , max(cA[2],cB[2]) , max(cA[3],cB[3]) };
+  };
+
+  print("corners are: {d}\n", .{corners});
+
+  for (va) |v| {
+    const x = @floatToInt(i32, (v[0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
+    const y = @floatToInt(i32, (v[1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
+    print("x,y={},{}\n", .{x,y});
+    draw.drawCircle([4]u8,pic,x,y,6,.{200,200,0,255});
+  }
+
+  for (vb) |v| {
+    const x = @floatToInt(i32, (v[0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
+    const y = @floatToInt(i32, (v[1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
+    print("x,y={},{}\n", .{x,y});
+    draw.drawCircle([4]u8,pic,x,y,6,.{50,200,100,255});
+  }
+
+  try im.saveRGBA(pic,"strain-test.tga");
 
   var a_status = try allocator.alloc(VStatusTag,na);
   defer allocator.free(a_status);
@@ -109,10 +185,8 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   defer allocator.free(b_status);
   for (b_status) |*v| v.* = .unknown;
 
-  var cost = try allocator.alloc(f32,na*nb);
+  const cost = try pairwise_distances(allocator,Pts,va[0..],vb[0..]);
   defer allocator.free(cost);
-  for (cost) |*v| v.* = 0;
-  pairwise_distances(Pts,cost,va[0..],vb[0..]);
 
   // get delaunay triangles
   // FIXME 2D only for now
@@ -221,6 +295,8 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
     // find best match from among all vb based on strain costs
     var bestcost:?f32  = null;
     var bestidx:?usize = null;
+
+    // TODO: replace linear lookup with O(1) GridHash
     for (vb) |x_vb,vb_idx| {
 
       // skip vb if already assigned
@@ -259,7 +335,6 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
         bestcost = dx_cost;
         bestidx  = vb_idx;
       }
-
     }
 
     if (v.idx==0) {
@@ -268,12 +343,24 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
       print("best: {} {}\n", .{bestcost, bestidx});
     }
 
+    if (v.idx==50) {
+      bestidx=50;
+    }
+
     // update cell status and graph relations
     if (bestidx) |b_idx| {
       a_status[v.idx] = .parent;
       b_status[b_idx] = .daughter;
       asgn_a2b[v.idx][0] = @intCast(u32,b_idx);
       asgn_b2a[b_idx] = v.idx;
+
+      // draw a line
+      const xa = @floatToInt(i32, (va[v.idx][0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
+      const ya = @floatToInt(i32, (va[v.idx][1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
+      const xb = @floatToInt(i32, (vb[b_idx][0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
+      const yb = @floatToInt(i32, (vb[b_idx][1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
+      draw.drawLineInBounds([4]u8,pic,xa,ya,xb,yb,.{255,255,255,255});
+
     } else {
       a_status[v.idx] = .disappear;
     }
@@ -284,6 +371,10 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
       va_neib_count[va_neib.?] += 1;
       try vertQ.add(.{.idx=va_neib.? , .nneibs=va_neib_count[va_neib.?]});
     }
+
+    try im.saveRGBA(pic,"strain-test-2.tga");
+    const userval = try ask_user();
+    if (userval==0) break;
 
   }
   
@@ -329,15 +420,15 @@ test "track. greedy Strain Tracking 2D" {
 
 
 fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
-  var max = arr[0];
+  var amax = arr[0];
   var idx:usize = 0;
   for (arr) |v,i| {
-    if (v>max) {
+    if (v>amax) {
       idx = i;
-      max = v;
+      amax = v;
     }
   }
-  return .{.max=max , .idx=idx};
+  return .{.max=amax , .idx=idx};
 }
 
 
@@ -408,10 +499,8 @@ pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
   defer allocator.free(bin);
   for (bin) |*v| v.* = 0;
 
-  var cost = try allocator.alloc(f32,na*nb);
+  const cost = try pairwise_distances(allocator,T,va[0..],vb[0..]);
   defer allocator.free(cost);
-  for (cost) |*v| v.* = 0;
-  pairwise_distances(T,cost,va[0..],vb[0..]);
 
   var asgn = try allocator.alloc(u8,na*nb);
   defer allocator.free(asgn);
@@ -488,21 +577,25 @@ fn lessThan(context: void, a: CostEdgePair, b: CostEdgePair) std.math.Order {
   return std.math.order(a.cost, b.cost);
 }
 
-
 const Pts3 = [3]f32;
 const Pts  = del.Vec2;
 
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
-fn pairwise_distances(comptime T:type, cost:[]f32, a:[]T, b:[]T) void {
+pub fn pairwise_distances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
   const na = a.len;
   const nb = b.len;
-  assert(cost.len == na*nb);
+
+  var cost = try al.alloc(f32,na*nb);
+  for (cost) |*v| v.* = 0;
+
   for (a) |x,i| {
     for (b) |y,j| {
       cost[i*nb + j] = dist(T,x,y);
     }
   }
+
+  return cost;
 }
 
 fn dist(comptime T:type, x:T, y:T) f32 {
