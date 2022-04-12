@@ -25,34 +25,35 @@ test {
   std.testing.refAllDecls(@This());
 }
 
-// test "spatial. bin random points onto 2D grid" {
+test "spatial. bin random points onto 2D grid" {
+  if (true) return error.SkipZigTest;
 
-//   var xs:[100]f32 = undefined;
-//   for (xs) |*v| v.* = random.float(f32)*100.0;
-//   var ys:[100]f32 = undefined;
-//   for (ys) |*v| v.* = random.float(f32)*100.0;
+  var xs:[100]f32 = undefined;
+  for (xs) |*v| v.* = random.float(f32)*100.0;
+  var ys:[100]f32 = undefined;
+  for (ys) |*v| v.* = random.float(f32)*100.0;
 
-//   var grid = try im.Img2D(u8).init(10,10);
-//   defer grid.deinit();
+  var grid = try im.Img2D(u8).init(10,10);
+  defer grid.deinit();
 
-//   for (xs) |x,i| {
+  for (xs) |x,i| {
 
-//     const y = ys[i];
-//     const nx = @floatToInt(usize, x/10);
-//     const ny = @floatToInt(usize, y/10);
+    const y = ys[i];
+    const nx = @floatToInt(usize, x/10);
+    const ny = @floatToInt(usize, y/10);
 
-//     grid.img[nx*10 + ny] += 1;
-//   }
+    grid.img[nx*10 + ny] += 1;
+  }
 
-//   var rgba = try im.Img2D([4]u8).init(10,10);
-//   defer rgba.deinit();
+  var rgba = try im.Img2D([4]u8).init(10,10);
+  defer rgba.deinit();
 
-//   for (grid.img) |g,i| {
-//     const r = @intCast(u8, (@intCast(u16,g)*10)%255);
-//     rgba.img[i] = .{r,r,r,255};
-//   }
-//   try im.saveRGBA(rgba , test_home ++ "spatial.tga");
-// }
+  for (grid.img) |g,i| {
+    const r = @intCast(u8, (@intCast(u16,g)*10)%255);
+    rgba.img[i] = .{r,r,r,255};
+  }
+  try im.saveRGBA(rgba , test_home ++ "spatial.tga");
+}
 
 test "spatial. GridHash" {
 
@@ -85,12 +86,33 @@ const BBox = geo.BBox;
 
 const floor = std.math.floor;
 
+
+
+// Prealloc idx and dist memory for fast multiple queries
+const IdsDists = struct{
+  ids:[]u16 , 
+  dists:[]f32 , 
+  n_ids:*usize ,
+
+  pub fn init(al:Allocator, capacity:u16) ! IdsDists {
+    var ids  = try al.alloc(u16,capacity);
+    var dists = try al.alloc(f32,capacity);
+    var n_ids:usize = capacity;
+    return IdsDists{.ids=ids , .dists=dists , .n_ids=&n_ids};
+  }
+
+  pub fn deinit(self:IdsDists , al:Allocator) void {
+    al.free(self.ids);
+    al.free(self.dists);
+  }
+
+};
+
 const GridHash = struct {
 
     const Self = @This();
     const Elem = ?u16;
     const SetRoot = u16;
-    const IdsDists = struct{ids:[]u16 , dists:[]f32 , n_ids:*usize};
 
     map: []Elem,
     nx: u32,
@@ -101,8 +123,6 @@ const GridHash = struct {
     allo:Allocator,
     bb:geo.BBox,
     pts:[]Vec2,
-
-
 
     pub fn init(allo:Allocator,
                 nx:u32,
@@ -254,28 +274,24 @@ const GridHash = struct {
 const pairwise_distances = @import("track.zig").pairwise_distances;
 
 // pub fn main() !void {
-
 test "spatial. radius neibs" {
 
   const N = 5_000;
   var pts:[N]Vec2 = undefined;
   for (pts) |*v| v.* = .{random.float(f32)*100.0 , random.float(f32)*100.0};
+  
   const sqrtN = @floatToInt(u16,@sqrt(@intToFloat(f32,N)));
   var gh = try GridHash.init(allocator,sqrtN,sqrtN,20,pts[0..],null);
   defer gh.deinit();
   
+  // Prealloc idx and dist memory for fast multiple queries
+  const res = try IdsDists.init(allocator,200);
+  defer res.deinit(allocator);
+
+  // Prealloc pdneibs buffer;
   const pairdist = try pairwise_distances(allocator,Vec2,pts[0..],pts[0..]);
   defer allocator.free(pairdist);
 
-  // Prealloc idx and dist memory for fast multiple queries
-  var ids  = try allocator.alloc(u16,200);
-  defer allocator.free(ids);
-  var dists = try allocator.alloc(f32,200);
-  defer allocator.free(dists);
-  var n_ids:usize = 200;
-  var res = GridHash.IdsDists{.ids=ids , .dists=dists , .n_ids=&n_ids};
-
-  // Prealloc pdneibs buffer;
   var buf = try allocator.alloc(u16,200);
   defer allocator.free(buf);
 
@@ -328,12 +344,8 @@ test "spatial. radius speed test" {
   const t1 = std.time.nanoTimestamp();
 
   // Prealloc idx and dist memory for fast multiple queries
-  var idx  = try allocator.alloc(u16,200);
-  defer allocator.free(idx);
-  var dist = try allocator.alloc(f32,200);
-  defer allocator.free(dist);
-  var n_ids:usize = 200;
-  var res = GridHash.IdsDists{.ids=idx , .dists=dist , .n_ids=&n_ids};
+  var res = try IdsDists.init(allocator,200);
+  defer res.deinit(allocator);
 
   const t1a = std.time.nanoTimestamp();
 
