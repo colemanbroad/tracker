@@ -1,32 +1,30 @@
 const std = @import("std");
-const print = std.debug.print;
-const assert = std.debug.assert;
-const expect = std.testing.expect;
-
 const im = @import("imageBase.zig");
+const geo = @import("geometry.zig");
 
-var prng = std.rand.DefaultPrng.init(0);
-const random = prng.random();
+const print     = std.debug.print;
+const assert    = std.debug.assert;
+const expect    = std.testing.expect;
+var   allocator = std.testing.allocator;
+var   prng      = std.rand.DefaultPrng.init(0);
+const random    = prng.random();
+
+
 const Allocator = std.mem.Allocator;
-var allocator = std.testing.allocator;
-
-const x0 = random.float(f32)*100.0;
-const y0 = random.float(f32)*100.0;
-
-const Vec2 = geo.Vec2;
-const clipi = geo.clipi;
-
+const Vec2  = geo.Vec2;
+const Vec3  = geo.Vec3;
 const Range = geo.Range;
+const BBox  = geo.BBox;
 
-const test_home = @import("tester.zig").test_path ++ "spatial/";
-const mkdirIgnoreExistsAbsolute = @import("tester.zig").mkdirIgnoreExistsAbsolute;
-test {
-  try mkdirIgnoreExistsAbsolute(test_home);
-  std.testing.refAllDecls(@This());
-}
+const clipi = geo.clipi;
+const floor = std.math.floor;
+
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/spatial/";
+
+test {std.testing.refAllDecls(@This());}
 
 test "spatial. bin random points onto 2D grid" {
-  if (true) return error.SkipZigTest;
+  // return error.SkipZigTest;
 
   var xs:[100]f32 = undefined;
   for (xs) |*v| v.* = random.float(f32)*100.0;
@@ -66,12 +64,7 @@ test "spatial. GridHash" {
     _ = gh.neibs(p);
     // print("{}→{d}\n",.{i,gh.neibs(p)}); 
   }
-
 }
-
-
-const geo = @import("geometry.zig");
-const BBox = geo.BBox;
 
 /// Points in 2D are placed into bins on a grid.
 /// The grid bins each spatial dimension and we remember a simple affine coordinate transformation for the bounds
@@ -83,10 +76,6 @@ const BBox = geo.BBox;
 /// points in [min + n*dx,min + (n+1)*dx) → grid[n]
 /// therefore, a point at x' maps to floor((x'-xmin)/dx)
 /// How can we efficiently figure out nx? That's tricky. If we have a radius constraint for NN checks, then it should just be the radius.
-
-const floor = std.math.floor;
-
-
 
 // Prealloc idx and dist memory for fast multiple queries
 const IdsDists = struct{
@@ -105,173 +94,198 @@ const IdsDists = struct{
     al.free(self.ids);
     al.free(self.dists);
   }
-
 };
 
 const GridHash = struct {
 
-    const Self = @This();
-    const Elem = ?u16;
-    const SetRoot = u16;
+  const Self = @This();
+  const Elem = ?u16;
+  const SetRoot = u16;
 
-    map: []Elem,
-    nx: u32,
-    ny: u32,
-    // dx: f32,
-    // dy: f32,
-    nelemax: u32,
-    allo:Allocator,
-    bb:geo.BBox,
-    pts:[]Vec2,
+  map: []Elem,
+  nx: u32,
+  ny: u32,
+  // dx: f32,
+  // dy: f32,
+  nelemax: u32,
+  allo:Allocator,
+  bb:geo.BBox,
+  pts:[]Vec2,
 
-    pub fn init(allo:Allocator,
-                nx:u32,
-                ny:u32,
-                nelemax:u32,
-                _pts:[]Vec2,
-                labels:?[]u16,
-                ) !Self {
+  pub fn init(allo:Allocator,
+              nx:u32,
+              ny:u32,
+              nelemax:u32,
+              _pts:[]Vec2,
+              labels:?[]u16,
+              ) !Self {
 
-      var pts = try allo.alloc(Vec2,_pts.len);
-      for (pts) |*p,i| p.* = _pts[i];
-      const map = try allocator.alloc(Elem, nx*ny*nelemax);
-      // print("\n\nmap.len = {}\n",.{map.len});
-      errdefer allocator.free(map);
-      for (map) |*v| v.* = null;
+    var pts = try allo.alloc(Vec2,_pts.len);
+    for (pts) |*p,i| p.* = _pts[i];
+    const map = try allocator.alloc(Elem, nx*ny*nelemax);
+    // print("\n\nmap.len = {}\n",.{map.len});
+    errdefer allocator.free(map);
+    for (map) |*v| v.* = null;
 
-      var bb = geo.boundsBBox(pts);
-      const ddx = 0.05*(bb.x.hi-bb.x.lo);
-      const ddy = 0.05*(bb.y.hi-bb.y.lo);
+    var bb = geo.boundsBBox(pts);
+    const ddx = 0.05*(bb.x.hi-bb.x.lo);
+    const ddy = 0.05*(bb.y.hi-bb.y.lo);
 
-      bb.x.lo += -ddx;
-      bb.x.hi +=  ddx;
-      bb.y.lo += -ddy;
-      bb.y.hi +=  ddy;
+    bb.x.lo += -ddx;
+    bb.x.hi +=  ddx;
+    bb.y.lo += -ddy;
+    bb.y.hi +=  ddy;
 
-      // const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
-      // const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
+    // const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
+    // const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
 
-      outer: for (pts) |p,i| { // i = pt label
+    outer: for (pts) |p,i| { // i = pt label
 
-        const l = if (labels) |lab| lab[i] else i;
+      const l = if (labels) |lab| lab[i] else i;
 
-        const ix = x2grid(p[0],bb.x,nx);
-        const iy = x2grid(p[1],bb.y,ny);
+      const ix = x2grid(p[0],bb.x,nx);
+      const iy = x2grid(p[1],bb.y,ny);
 
-        const idx = (ix*ny + iy)*nelemax;
-        // print("ix,iy,i,idx = {},{},{},{}\n", .{ix,iy,i,idx});
+      const idx = (ix*ny + iy)*nelemax;
+      // print("ix,iy,i,idx = {},{},{},{}\n", .{ix,iy,i,idx});
 
-        for (map[idx..idx+nelemax]) |*m| {
-          if (m.*==null) {
-            m.* = @intCast(u16,l);
-            continue :outer ;
-          }
+      for (map[idx..idx+nelemax]) |*m| {
+        if (m.*==null) {
+          m.* = @intCast(u16,l);
+          continue :outer ;
         }
-
-        return error.PointDensityError;
       }
 
-      return Self{
-                  .allo=allo,
-                  .map=map,
-                  .nx=nx,
-                  .ny=ny,
-                  .nelemax=nelemax,
-                  // .dx=dx,
-                  // .dy=dy,
-                  .bb=bb,
-                  .pts=pts,
-                };
+      return error.PointDensityError;
     }
 
-    pub fn deinit(self:Self) void {
-      self.allo.free(self.map);
-      self.allo.free(self.pts);
-    }
+    return Self{
+                .allo=allo,
+                .map=map,
+                .nx=nx,
+                .ny=ny,
+                .nelemax=nelemax,
+                // .dx=dx,
+                // .dy=dy,
+                .bb=bb,
+                .pts=pts,
+              };
+  }
 
-    // pub fn pt2grid(p:Vec2,bb:BBox,nx:u16,ny:u16) [2]u16 {
-    //   const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
-    //   const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
-    //   const ix = clipi(u16, @floatToInt(u16,floor((p[0]-bb.x.lo)/dx)) , 0, nx-1);
-    //   const iy = clipi(u16, @floatToInt(u16,floor((p[1]-bb.y.lo)/dy)) , 0, ny-1);
-    //   return .{ix,iy};
-    // }
+  pub fn deinit(self:Self) void {
+    self.allo.free(self.map);
+    self.allo.free(self.pts);
+  }
 
-    pub fn x2grid(x:f32,xr:Range,nx:u32) u32 {
-      const dx = (xr.hi-xr.lo)/@intToFloat(f32,nx);
-      // print("floor((x-xr.lo)/dx) = {}\n", .{floor((x-xr.lo)/dx)});
-      const ix = @floatToInt(i32,floor((x-xr.lo)/dx));
-      if (ix<0) return 0;
-      if (ix>nx-1) return nx-1;
-      return @intCast(u32,ix);
-    }
+  // pub fn pt2grid(p:Vec2,bb:BBox,nx:u16,ny:u16) [2]u16 {
+  //   const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
+  //   const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
+  //   const ix = clipi(u16, @floatToInt(u16,floor((p[0]-bb.x.lo)/dx)) , 0, nx-1);
+  //   const iy = clipi(u16, @floatToInt(u16,floor((p[1]-bb.y.lo)/dy)) , 0, ny-1);
+  //   return .{ix,iy};
+  // }
+
+  pub fn x2grid(x:f32,xr:Range,nx:u32) u32 {
+    const dx = (xr.hi-xr.lo)/@intToFloat(f32,nx);
+    // print("floor((x-xr.lo)/dx) = {}\n", .{floor((x-xr.lo)/dx)});
+    const ix = @floatToInt(i32,floor((x-xr.lo)/dx));
+    if (ix<0) return 0;
+    if (ix>nx-1) return nx-1;
+    return @intCast(u32,ix);
+  }
 
 
-    pub fn neibs(self:Self, p:Vec2) []Elem {
-      // const ixiy = pt2grid(p,self.bb,self.nx,self.ny);
-      // const ix=ixiy[0];
-      // const iy=ixiy[1];
-      const ix = x2grid(p[0] , self.bb.x , self.nx);
-      const iy = x2grid(p[1] , self.bb.y , self.ny);
-      // print("neibs ix iy {} {}\n", .{ix,iy});
-      const idx = (ix*self.ny + iy)*self.nelemax;
-      return self.map[idx..idx+self.nelemax];
-    }
+  pub fn neibs(self:Self, p:Vec2) []Elem {
+    // const ixiy = pt2grid(p,self.bb,self.nx,self.ny);
+    // const ix=ixiy[0];
+    // const iy=ixiy[1];
+    const ix = x2grid(p[0] , self.bb.x , self.nx);
+    const iy = x2grid(p[1] , self.bb.y , self.ny);
+    // print("neibs ix iy {} {}\n", .{ix,iy});
+    const idx = (ix*self.ny + iy)*self.nelemax;
+    return self.map[idx..idx+self.nelemax];
+  }
 
-    // first search pairwise in grid, then if need more points expand to surroundings.
-    // search all boxes within `radius` of `p`
-    pub fn nnRadius(self:Self, res:IdsDists, p:Vec2, radius:f32) !void {
+  // first search pairwise in grid, then if need more points expand to surroundings.
+  // search all boxes within `radius` of `p`
+  pub fn nnRadius(self:Self, res:IdsDists, p:Vec2, radius:f32) !void {
 
-      const ix_min = x2grid(p[0]-radius , self.bb.x , self.nx);
-      const ix_max = x2grid(p[0]+radius , self.bb.x , self.nx);
-      const iy_min = x2grid(p[1]-radius , self.bb.y , self.ny);
-      const iy_max = x2grid(p[1]+radius , self.bb.y , self.ny);
+    const ix_min = x2grid(p[0]-radius , self.bb.x , self.nx);
+    const ix_max = x2grid(p[0]+radius , self.bb.x , self.nx);
+    const iy_min = x2grid(p[1]-radius , self.bb.y , self.ny);
+    const iy_max = x2grid(p[1]+radius , self.bb.y , self.ny);
 
-      // const nx = ix_max-ix_min+1;
-      // const ny = iy_max-iy_min+1;
+    // const nx = ix_max-ix_min+1;
+    // const ny = iy_max-iy_min+1;
 
-      var nn_ids = res.ids;
-      var dists  = res.dists;
+    var nn_ids = res.ids;
+    var dists  = res.dists;
 
-      var nn_count:usize = 0;
-      var xid = ix_min;
-      while (xid<=ix_max) : (xid+=1) {
-      var yid = iy_min;
-      while (yid<=iy_max) : (yid+=1) {
-        const idx = (xid*self.ny + yid)*self.nelemax;
-        // print("idx {} \n", .{idx});
-        const bin = self.map[idx..idx+self.nelemax];
-        // print("p {} xid {} yid {} bin {d}\n", .{p,xid,yid,bin});
-        // print("neibs {d} \n", .{self.neibs(p)});
-        for (bin) |e_| {
-          const e = if (e_) |e| e else continue;
-          const pt_e = self.pts[e];
-          const delta = p-pt_e;
-          const dist = @sqrt(@reduce(.Add,delta*delta));
+    var nn_count:usize = 0;
+    var xid = ix_min;
+    while (xid<=ix_max) : (xid+=1) {
+    var yid = iy_min;
+    while (yid<=iy_max) : (yid+=1) {
+      const idx = (xid*self.ny + yid)*self.nelemax;
+      // print("idx {} \n", .{idx});
+      const bin = self.map[idx..idx+self.nelemax];
+      // print("p {} xid {} yid {} bin {d}\n", .{p,xid,yid,bin});
+      // print("neibs {d} \n", .{self.neibs(p)});
+      for (bin) |e_| {
+        const e = if (e_) |e| e else continue;
+        const pt_e = self.pts[e];
+        // const delta = p-pt_e;
+        // const mydist = @sqrt(@reduce(.Add,delta*delta));
+        const mydist = dist(Vec2, p, pt_e);
 
-          if (dist<radius) {
-            // print("adding e={}\n",.{e});
-            nn_ids[nn_count] = e;
-            dists[nn_count] = dist;
-            nn_count += 1;
-          }
+        if (mydist<radius) {
+          // print("adding e={}\n",.{e});
+          nn_ids[nn_count] = e;
+          dists[nn_count] = mydist;
+          nn_count += 1;
         }
-
       }
-      }
-
-      res.n_ids.* = nn_count;
-
-      // remove undefined regions
-      // nn_ids = al.shrink(nn_ids,nn_count);
-      // dists = al.shrink(dists,nn_count);
-      // return IdsDists{.ids=nn_ids , .dists=dists};
 
     }
+    }
+
+    res.n_ids.* = nn_count;
+
+    // remove undefined regions
+    // nn_ids = al.shrink(nn_ids,nn_count);
+    // dists = al.shrink(dists,nn_count);
+    // return IdsDists{.ids=nn_ids , .dists=dists};
+
+  }
 };
 
 
-const pairwise_distances = @import("track.zig").pairwise_distances;
+
+// array order is [a,b]. i.e. a has stride nb. b has stride 1.
+pub fn pairwise_distances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
+  const na = a.len;
+  const nb = b.len;
+
+  var cost = try al.alloc(f32,na*nb);
+  for (cost) |*v| v.* = 0;
+
+  for (a) |x,i| {
+    for (b) |y,j| {
+      cost[i*nb + j] = dist(T,x,y);
+    }
+  }
+
+  return cost;
+}
+
+fn dist(comptime T:type, x:T, y:T) f32 {
+  return switch (T){
+    Vec2  => (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]),
+    Vec3 => (x[0]-y[0])*(x[0]-y[0]) + (x[1]-y[1])*(x[1]-y[1]) + (x[2]-y[2])*(x[2]-y[2]),
+    else => unreachable,
+  };
+}
+
 
 // pub fn main() !void {
 test "spatial. radius neibs" {

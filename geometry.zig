@@ -13,23 +13,11 @@ const random = prng.random();
 var allocator = std.testing.allocator;
 // const print = std.debug.print;
 
-const draw = @import("drawing.zig");
-const drawPoints3DMovie = draw.drawPoints3DMovie;
-const drawMesh3DMovie2 = draw.drawMesh3DMovie2;
 
 const Vector = std.meta.Vector;
 pub const Vec3 = Vector(3,f32);
 
-const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
-const dir_mkdirIgnoreExists = @import("tester.zig").dir_mkdirIgnoreExists;
-
-
-test {
-  const testdir = @import("tester.zig").cwd;
-  try dir_mkdirIgnoreExists(testdir,"geometry/");
-  const testdir_local = try testdir.openDir("geometry/",.{});
-  try testdir_local.setAsCwd();
-}
+test {std.testing.refAllDecls(@This());}
 
 
 // mean 0 stddev 1
@@ -37,6 +25,18 @@ pub fn randNormalVec3() Vec3 {return Vec3{random.floatNorm(f32), random.floatNor
 pub fn randNormalVec2() Vec2 {return Vec2{random.floatNorm(f32), random.floatNorm(f32)};} 
 
 
+// spiral walk around the unit sphere
+pub fn sphereTrajectory() [100]Vec3 {
+  var phis:[100]f32 = undefined;
+  // for (phis) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * pi;
+  for (phis) |*v,i| v.* = ((@intToFloat(f32,i))/99) * pi;
+  var thetas:[100]f32 = undefined;
+  // for (thetas) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * 2*pi;
+  for (thetas) |*v,i| v.* = ((@intToFloat(f32,i))/99) * 2*pi;
+  var pts:[100]Vec3 = undefined;
+  for (pts) |*v,i| v.* = Vec3{@cos(phis[i]) , @sin(thetas[i])*@sin(phis[i]) , @cos(thetas[i])*@sin(phis[i]) }; // ZYX coords
+  return pts;
+}
 
 pub const BoxPoly = struct {
     vs:[8]Vec3 ,
@@ -157,29 +157,6 @@ pub fn gridMesh(nx:u32,ny:u32) !Mesh {
 }
 
 
-test "mesh. Chaikin Curve" {
-  // pub fn main() !void {
-
-  const npts:u32 = 10;
-  // var pts = try allocator.alloc(Vec3,npts*(1<<nsubdiv));
-  const pts0 = try allocator.alloc(Vec3,npts);
-  defer allocator.free(pts0);
-  // var pts0:[npts]Vec3 = undefined;
-  pts0[0] = randNormalVec3();
-  const dx = Vec3{0.01,0.01,0.01};
-
-  var i:u32 = 1;
-  while (i<npts) : (i+=1) {
-    pts0[i] = pts0[i-1] + randNormalVec3() * dx;
-  }
-
-  const curve = try chaikinPeriodic(pts0);
-  defer allocator.free(curve);
-
-  try mkdirIgnoreExists("chaikin");
-  _ = try drawPoints3DMovie(curve,"chaikin/img");
-}
-
 // const boundaryConditions = enum {
 //   Periodic,
 //   Constant,
@@ -246,26 +223,7 @@ pub fn chaikinPeriodic(pts0:[]Vec3) ![]Vec3 {
   // return pts[idx_start..idx_end];
 }
 
-test "mesh. subdivideMesh()" {
-  // pub fn main() !void {
 
-  // _ = try plotMesh(surf,"polysurf.tga");
-  var box = BoxPoly.createAABB(.{-3,-3,-3} , .{5,3,4});
-  // box.vs[0] = .{1,2,3};
-  // @compileLog(@TypeOf(box.vs[0..]));
-  // const surf1 = Mesh{.vs=box.vs[0..] , .es=box.es[0..] , .fs=box.fs[0..]};
-  // const surf1 = box.toMesh();
-  var a = box.vs.len; var b = box.es.len; var c = box.fs.len; // TODO: FIXME: I shouldn't have to do this just to convert types....
-  const surf1 = Mesh{.vs=box.vs[0..a] , .es=box.es[0..b] , .fs=box.fs[0..c]};
-
-  // const surf = try subdivideCurve(surf1 , 5);
-  // try drawMesh3DMovie2(surf,"polysurf3D/img");
-
-  const surf2 = try subdivideMesh(surf1 , 5);
-  defer surf2.deinit();
-  try drawMesh3DMovie2(surf2,"polysurf3D/img");
-
-}
 
 // Only subdivides edges. Works even if surf.fs==null;
 pub fn subdivideCurve(surf:Mesh , nsubdiv:u32) !Mesh {
@@ -585,7 +543,7 @@ pub fn VertexNeibArray(comptime nneibs:u8) type {
   };
 }
 
-test "mesh. VertexNeibArray on BoxPoly" {
+test "geometry. mesh. VertexNeibArray on BoxPoly" {
   var box = BoxPoly.createAABB(.{0,0,0} , .{1,1,1});
   const surf = Mesh{.vs=box.vs[0..] , .es=box.es[0..] , .fs=box.fs[0..]};
   const nl   = try VertexNeibArray(3).init(surf.es, surf.vs.len);
@@ -628,7 +586,7 @@ pub fn Face2Edge(comptime nneibs:u8) type {
   };
 }
 
-test "mesh. Face2Edge on BoxPoly" {
+test "geometry. mesh. Face2Edge on BoxPoly" {
   var box  = BoxPoly.createAABB(.{0,0,0} , .{1,1,1});
   const surf = Mesh{.vs=box.vs[0..] , .es=box.es[0..] , .fs=box.fs[0..]};
   const e2f   = try Face2Edge(4).init( surf.es, surf.fs.?);
@@ -1334,26 +1292,25 @@ pub fn boundsBBox(pts:anytype) BBox {
 }
 
 pub fn clipf32(a : f32, mina : f32, maxa : f32) f32 {
-    if (a == std.math.inf(f32))
-        return maxa;
-    if (a == -std.math.inf(f32))
-        return mina;
-    if (a == std.math.nan(f32))
-        return maxa;
-    if (a == -std.math.nan(f32))
-        return mina;
-    if (a > maxa)
-        return maxa;
-    if (a < mina)
-        return mina;
-    return a;
+  if (a == std.math.inf(f32))
+      return maxa;
+  if (a == -std.math.inf(f32))
+      return mina;
+  if (a == std.math.nan(f32))
+      return maxa;
+  if (a == -std.math.nan(f32))
+      return mina;
+  if (a > maxa)
+      return maxa;
+  if (a < mina)
+      return mina;
+  return a;
 }
 
 pub fn clipi(comptime T:type, a : T, mina : T, maxa : T) T {
-
-    if (a > maxa) return maxa;
-    if (a < mina) return mina;
-    return a;
+  if (a > maxa) return maxa;
+  if (a < mina) return mina;
+  return a;
 }
 
 

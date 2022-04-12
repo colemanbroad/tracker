@@ -1,26 +1,41 @@
-// build with 
-// zig build-lib track.zig -dynamic
-// to make a dylib to load in python
-// OR
-// zig test track.zig
+// HOWTO: load 'lib.a' ?
+// const del = @import("/Users/broaddus/Desktop/projects-personal/zig/zig-opencl-test/src/libdelaunay.a");
 
-// zig run track.zig
+const std  = @import("std");
+const del  = @import("delaunay.zig");
+const im   = @import("imageBase.zig");
+
+const drawCircle = @import("drawingBasic.zig").drawCircle;
+const drawLineInBounds = @import("drawingBasic.zig").drawLineInBounds;
 
 
-const std = @import("std");
 const PriorityQueue = std.PriorityQueue;
+const Allocator = std.mem.Allocator;
 const print = std.debug.print;
 const assert = std.debug.assert;
+const random = prng.random();
+var   prng = std.rand.DefaultPrng.init(0);
 
-const Allocator = std.mem.Allocator;
+const min = std.math.min;
+const max = std.math.max;
 
-const NT = i32;
-export fn add(a : NT, b : NT) NT {
+
+// Zig doesn't have tuple-of-types i.e. product types yet so all fields must be named. This is probably good.
+// https://github.com/ziglang/zig/issues/4335 
+// var allocator = std.heap.GeneralPurposeAllocator(.{}){};
+var allocator = std.testing.allocator; //(.{}){};
+const Pts3 = [3]f32;
+const Pts  = del.Vec2;
+
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/track/";
+test {std.testing.refAllDecls(@This());}
+
+
+export fn add(a : i32, b : i32) i32 {
   return a + b;
 }
-
-export fn sum(a : [*]NT, n : u32) NT {
-  var tot:NT = 0;
+export fn sum(a : [*]i32, n : u32) i32 {
+  var tot:i32 = 0;
   var i:u32 = 0;
   while (i<n) {
     tot += a[i];
@@ -30,26 +45,9 @@ export fn sum(a : [*]NT, n : u32) NT {
   return tot;
 }
 
-// HOWTO: load 'lib.a' ?
-// const del = @import("/Users/broaddus/Desktop/projects-personal/zig/zig-opencl-test/src/libdelaunay.a");
 
-const del  = @import("delaunay.zig");
-const draw = @import("drawing.zig");
-const toys = @import("imageToys.zig");
-const im   = @import("imageBase.zig");
-
-var cwd = std.fs.cwd();
-
-test {std.testing.refAllDecls(@This());}
-
-// const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
-
-var prng = std.rand.DefaultPrng.init(0);
-const random = prng.random();
-
-
-// test "strain tracking" {
-pub fn main() !void {
+// pub fn main() !void {
+test "strain tracking" {
   print("\n\n",.{});
 
   const na = 101;
@@ -125,22 +123,22 @@ pub fn minmaxPts(arr:[]Pts) [4]f32 {
 }
 
 
-const min = std.math.min;
-const max = std.math.max;
-
 fn ask_user() !i64 {
-    const stdin = std.io.getStdIn().reader();
-    const stdout = std.io.getStdOut().writer();
 
-    var buf: [10]u8 = undefined;
-    
-    try stdout.print("Press 0 to quit: ", .{});
+  if (@import("builtin").is_test) return 0;
 
-    if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
-        const res = std.fmt.parseInt(i64, user_input, 10) catch return 1;
-        if (res==0) return 0;
-    }
-    return 1;
+  const stdin = std.io.getStdIn().reader();
+  const stdout = std.io.getStdOut().writer();
+
+  var buf: [10]u8 = undefined;
+  
+  try stdout.print("Press 0 to quit: ", .{});
+
+  if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
+      const res = std.fmt.parseInt(i64, user_input, 10) catch return 1;
+      if (res==0) return 0;
+  }
+  return 1;
 }
 
 pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
@@ -165,17 +163,17 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
     const x = @floatToInt(i32, (v[0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
     const y = @floatToInt(i32, (v[1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
     print("x,y={},{}\n", .{x,y});
-    draw.drawCircle([4]u8,pic,x,y,6,.{200,200,0,255});
+    drawCircle([4]u8,pic,x,y,6,.{200,200,0,255});
   }
 
   for (vb) |v| {
     const x = @floatToInt(i32, (v[0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
     const y = @floatToInt(i32, (v[1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
     print("x,y={},{}\n", .{x,y});
-    draw.drawCircle([4]u8,pic,x,y,6,.{50,200,100,255});
+    drawCircle([4]u8,pic,x,y,6,.{50,200,100,255});
   }
 
-  try im.saveRGBA(pic,"strain-test.tga");
+  try im.saveRGBA(pic , test_home++"strain-test.tga");
 
   var a_status = try allocator.alloc(VStatusTag,na);
   defer allocator.free(a_status);
@@ -274,7 +272,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   // we also have a cost based on the displacement v0(t),v0(t+1)
   // we can pick a vertex at random and choose it's lowest cost match. then given that assignment we can fill in the rest.
 
-  var vertQ = PriorityQueue(TNeibsAssigned, void, gt_TNeibsAssigned).init(allocator, {});
+  var vertQ = PriorityQueue(TNeibsAssigned, void, gtTNeibsAssigned).init(allocator, {});
   defer vertQ.deinit();
   try vertQ.add(.{.idx=50 , .nneibs=0});
 
@@ -359,7 +357,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
       const ya = @floatToInt(i32, (va[v.idx][1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
       const xb = @floatToInt(i32, (vb[b_idx][0]-corners[0])/(corners[2]-corners[0])*(900-5) + 5 );
       const yb = @floatToInt(i32, (vb[b_idx][1]-corners[1])/(corners[3]-corners[1])*(900-5) + 5 );
-      draw.drawLineInBounds([4]u8,pic,xa,ya,xb,yb,.{255,255,255,255});
+      drawLineInBounds([4]u8,pic,xa,ya,xb,yb,.{255,255,255,255});
 
     } else {
       a_status[v.idx] = .disappear;
@@ -372,7 +370,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
       try vertQ.add(.{.idx=va_neib.? , .nneibs=va_neib_count[va_neib.?]});
     }
 
-    try im.saveRGBA(pic,"strain-test-2.tga");
+    try im.saveRGBA(pic , test_home++"strain-test-2.tga");
     const userval = try ask_user();
     if (userval==0) break;
 
@@ -432,7 +430,6 @@ fn argmax1d(comptime T:type, arr:[]T) struct{max:T , idx:usize} {
 }
 
 
-// pub fn main() !void {
 test "track. greedy min-cost tracking 3D" {
 
   print("\n\n",.{});
@@ -466,7 +463,6 @@ test "track. greedy min-cost tracking 2D" {
 }
 
 
-
 export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 {
 
   const va_ = allocator.alloc(Pts,na) catch return -1;
@@ -481,8 +477,6 @@ export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 
 
   return 0;
 }
-
-
 
 pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
 
@@ -510,7 +504,7 @@ pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
   // sort costs
   // continue adding costs cheapest-first as long as they don't violate asgn constraints
   // sort each row by smallest cost? then 
-  var edgeQ = PriorityQueue(CostEdgePair, void, lessThan).init(allocator, {});
+  var edgeQ = PriorityQueue(CostEdgePair, void, ltCostEdgePair).init(allocator, {});
   defer edgeQ.deinit();
   for (cost) |c,i| {
     const ia = i / nb;
@@ -556,30 +550,15 @@ pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
   }
 
   return parents;
-
 }
 
 
 
-
-
-// Zig doesn't have tuple-of-types i.e. product types yet so all fields must be named. This is probably good.
-// https://github.com/ziglang/zig/issues/4335 
-const CostEdgePair:type = struct{cost:f32, ia:u32, ib:u32};
-const testing = std.testing;
-
-// var allocator = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = std.testing.allocator; //(.{}){};
-
-// const Order = std.math.Order;
-fn lessThan(context: void, a: CostEdgePair, b: CostEdgePair) std.math.Order {
+const CostEdgePair = struct{cost:f32, ia:u32, ib:u32};
+fn ltCostEdgePair(context: void, a: CostEdgePair, b: CostEdgePair) std.math.Order {
   _ = context;
   return std.math.order(a.cost, b.cost);
 }
-
-const Pts3 = [3]f32;
-const Pts  = del.Vec2;
-
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
 pub fn pairwise_distances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
@@ -607,7 +586,7 @@ fn dist(comptime T:type, x:T, y:T) f32 {
 }
 
 const TNeibsAssigned = struct{idx:u32,nneibs:u8};
-fn gt_TNeibsAssigned(context: void, a: TNeibsAssigned, b: TNeibsAssigned) std.math.Order {
+fn gtTNeibsAssigned(context: void, a: TNeibsAssigned, b: TNeibsAssigned) std.math.Order {
   _ = context;
   return std.math.order(a.nneibs, b.nneibs);
 }

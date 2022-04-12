@@ -1,17 +1,24 @@
 const std = @import("std");
 const im = @import("imageBase.zig");
-const cc = @import("./c.zig");
+const cc = @import("c.zig");
 const geo = @import("geometry.zig");
 // const mesh = @import("mesh.zig");
 
 const Img2D = im.Img2D;
 
-const toys = @import("imageToys.zig");
+const cam3D = @import("Cam3D.zig");
+
+// const toys = @import("imageToys.zig");
 const Mesh              = geo.Mesh;
-const inbounds          = toys.inbounds;
-const sphereTrajectory  = toys.sphereTrajectory;
-const rotate2cam        = toys.rotate2cam;
-const PerspectiveCamera = toys.PerspectiveCamera;
+// const inbounds          = toys.inbounds;
+const sphereTrajectory  = geo.sphereTrajectory;
+const rotate2cam        = cam3D.rotate2cam;
+const PerspectiveCamera = cam3D.PerspectiveCamera;
+
+
+pub inline fn inbounds(img:anytype , px:anytype) bool {
+  if (0 <= px[0] and px[0]<img.nx and 0 <= px[1] and px[1]<img.ny) return true else return false;
+}
 
 const bounds3 = geo.bounds3;
 const gridMesh = geo.gridMesh;
@@ -23,8 +30,8 @@ const Vec3 = geo.Vec3;
 const mkdirIgnoreExists = @import("tester.zig").mkdirIgnoreExists;
 const uvec2 = geo.uvec2;
 const Vec2 = geo.Vec2;
-const fillImg2D = toys.fillImg2D;
-const randomColorLabels = toys.randomColorLabels;
+// const fillImg2D = toys.fillImg2D;
+// const randomColorLabels = toys.randomColorLabels;
 
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -36,62 +43,70 @@ const assert = std.debug.assert;
 // var prng = std.rand.DefaultPrng.init(0);
 const Vector = std.meta.Vector;
 
+// const join = std.fs.path.join;
+// const test_home = @import("tester.zig").test_path ++ "drawing/";
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/drawing/";
+test {std.testing.refAllDecls(@This()); }
+
+// const test_home = std.fs.path.;
+// const mkdirIgnoreExistsAbsolute = @import("tester.zig").mkdirIgnoreExistsAbsolute;
 
 
 
+// // focus on center of manifold 3D bounding box, plot rotation around bounding box
+// // assumes `pts` are in order on a curve
+// // DEPRECATED
+// pub fn drawPoints3DMovie(pts:[]Vec3, name:[]const u8) !void {
+//   const bds = bounds3(pts);
+//   const width = bds[1]-bds[0];
+//   const midpoint = (bds[1] + bds[0]) / Vec3{2,2,2};
+//   const spin = sphereTrajectory();
+//   const dist2focus = abs(width) * 10; // x aperture is 0.2 by default. abs(width*5) should be just enough to fit all points in view.
 
-// focus on center of manifold 3D bounding box, plot rotation around bounding box
-// assumes `pts` are in order on a curve
-// DEPRECATED
-pub fn drawPoints3DMovie(pts:[]Vec3, name:[]const u8) !void {
-  const bds = bounds3(pts);
-  const width = bds[1]-bds[0];
-  const midpoint = (bds[1] + bds[0]) / Vec3{2,2,2};
-  const spin = sphereTrajectory();
-  const dist2focus = abs(width) * 10; // x aperture is 0.2 by default. abs(width*5) should be just enough to fit all points in view.
+//   var namestr = try allocator.alloc(u8,name.len + 8);
 
-  var namestr = try allocator.alloc(u8,name.len + 8);
+//   for (spin) |campt,j| {
 
-  for (spin) |campt,j| {
+//     // project from 3d->2d with perspective, draw lines in 2d, then save
+//     var cam = try PerspectiveCamera.init(campt*Vec3{dist2focus,dist2focus,dist2focus}, .{0,0,0}, 1600, 900, null, );
+//     defer cam.deinit();
+//     cc.bres.init(&cam.screen[0],&cam.nyPixels,&cam.nxPixels);
 
-    // project from 3d->2d with perspective, draw lines in 2d, then save
-    var cam = try PerspectiveCamera.init(campt*Vec3{dist2focus,dist2focus,dist2focus}, .{0,0,0}, 1600, 900, null, );
-    defer cam.deinit();
-    cc.bres.init(&cam.screen[0],&cam.nyPixels,&cam.nxPixels);
-
-    for (pts) |pt,i| {
+//     for (pts) |pt,i| {
       
-      const px = cam.world2pix(pt - midpoint);
+//       const px = cam.world2pix(pt - midpoint);
       
-      // plot dot
-      cc.bres.setPixel(@intCast(i32,px.x),@intCast(i32,px.y));
-      cc.bres.setPixel(@intCast(i32,px.x-1),@intCast(i32,px.y-1));
-      cc.bres.setPixel(@intCast(i32,px.x-1),@intCast(i32,px.y));
-      cc.bres.setPixel(@intCast(i32,px.x),@intCast(i32,px.y-1));
-      // connect dots with lines
-      if (i>0) {
-        const px0 = cam.world2pix(pts[i-1] - midpoint);
-        cc.bres.plotLine(@intCast(i32,px0.x),@intCast(i32,px0.y),@intCast(i32,px.x),@intCast(i32,px.y));
-      }
+//       // plot dot
+//       cc.bres.setPixel(@intCast(i32,px.x),@intCast(i32,px.y));
+//       cc.bres.setPixel(@intCast(i32,px.x-1),@intCast(i32,px.y-1));
+//       cc.bres.setPixel(@intCast(i32,px.x-1),@intCast(i32,px.y));
+//       cc.bres.setPixel(@intCast(i32,px.x),@intCast(i32,px.y-1));
+//       // connect dots with lines
+//       if (i>0) {
+//         const px0 = cam.world2pix(pts[i-1] - midpoint);
+//         cc.bres.plotLine(@intCast(i32,px0.x),@intCast(i32,px0.y),@intCast(i32,px.x),@intCast(i32,px.y));
+//       }
 
-    }
+//     }
 
-    namestr = try std.fmt.bufPrint(namestr, "{s}{:0>4}.tga", .{name, j});
-    try im.saveF32AsTGAGreyNormedCam(cam, namestr);
+//     namestr = try std.fmt.bufPrint(namestr, "{s}{:0>4}.tga", .{name, j});
+//     try im.saveF32AsTGAGreyNormedCam(cam, namestr);
 
-  }
-}
+//   }
+// }
+
 
 // render a 3D surface from a spiral trajectory
 pub fn drawMesh3DMovie2(surf:Mesh, name:[]const u8) !void {
   const pic = try Img2D(f32).init(800,600);
-  // defer pic.deinit();
+  defer pic.deinit();
+
   const spheretraj = sphereTrajectory();
-  var namestr = try allocator.alloc(u8,60);
-  // defer allocator.free(namestr);
+  var namestr = try allocator.alloc(u8,100);
+  defer allocator.free(namestr);
 
   const verts2d = try allocator.alloc([2]f32 , surf.vs.len);
-  // defer allocator.free(verts2d);
+  defer allocator.free(verts2d);
 
   for (spheretraj) |pt,i|{
     const verts = try rotate2cam(allocator, surf.vs , pt); // TODO: allow preallocation
@@ -234,135 +249,6 @@ pub fn faceZOrder(vertices:[]Vec3 , faces:[][4]u32) ![]u32 {
   return indices;
 }
 
-// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
-// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
-// Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D 👇 Drawing on Img2D
-
-
-pub fn drawLine(comptime T:type , img:Img2D(T) , _x0:u31 , _y0:u31 , x1:u31 , y1:u31 , val:T) void {
-
-  var x0:i32 = _x0;
-  var y0:i32 = _y0;
-  const dx =  myabs(x1-x0);
-  const sx:i8  = if (x0<x1) 1 else -1;
-  const dy = -myabs(y1-y0);
-  const sy:i8  = if (y0<y1) 1 else -1;
-  var err:i32 = dx+dy; // 
-  var e2:i32  = 0;
-
-  while (true) {
-    const idx = @intCast(u32,x0) + img.nx*@intCast(u32,y0);
-    img.img[idx] = val;
-    e2 = 2*err;
-    if (e2 >= dy) {
-      if (x0==x1) break;
-      err += dy; x0 += sx;
-    }
-    if (e2 <= dx) {
-      if (y0 == y1) break;
-      err += dx; y0 += sy;
-    }
-  }
-}
-
-pub fn drawLineInBounds(comptime T:type , img:Img2D(T) , _x0:i32 , _y0:i32 , x1:i32 , y1:i32 , val:T) void {
-
-  var x0 = _x0;
-  var y0 = _y0;
-  const dx =  myabs(x1-x0);
-  const sx:i8  = if (x0<x1) 1 else -1;
-  const dy = -myabs(y1-y0);
-  const sy:i8  = if (y0<y1) 1 else -1;
-  var err:i32 = dx+dy; // 
-  var e2:i32  = 0;
-
-  while (true) {
-    if (inbounds(img , .{x0,y0})) {    
-      const idx = @intCast(u32,x0) + img.nx*@intCast(u32,y0);
-      img.img[idx] = val;
-    }
-    e2 = 2*err;
-    if (e2 >= dy) {
-      if (x0==x1) break;
-      err += dy; x0 += sx;
-    }
-    if (e2 <= dx) {
-      if (y0 == y1) break;
-      err += dx; y0 += sy;
-    }
-  }
-}
-
-test "drawing. draw a simple yellow line" {
-  const pic = try Img2D([4]u8).init(600,400);
-  drawLine([4]u8 , pic , 10, 0 , 500 , 100 , .{0,255,255,255});
-  try im.saveRGBA(pic,"testeroo.tga");
-}
-
-pub fn drawCircle(comptime T: type, pic:Img2D(T), x0:i32, y0:i32, r:i32, val:T) void {
-  var idx:i32 = 0;
-  while (idx<4*r*r) : (idx+=1) {
-      const dx = @mod(idx,2*r) - r;
-      const dy = @divFloor(idx,2*r) - r;
-      const x  = x0 + dx;
-      const y  = y0 + dy;
-      if (inbounds(pic,.{x,y}) and dx*dx+dy*dy <= r*r){
-        const imgigx = @intCast(u31,x) + pic.nx * @intCast(u31,y);
-        pic.img[imgigx] = val;
-      }
-  }
-}
-
-// just a 1px circle outline. tested with delaunay circumcircles.
-pub fn drawCircleOutline(pic:Img2D([4]u8), xm:i32, ym:i32, _r:i32, val:[4]u8) void
-{
-   var r = _r;
-   var x = -r;
-   var y:i32 = 0;
-   var err:i32 = 2-2*r;                // /* bottom left to top right */
-   var x0:i32 = undefined;
-   var y0:i32 = undefined;
-   const nx = @intCast(i32,pic.nx);
-   var idx:usize = undefined;
-
-   while (x<0) {
-      
-      x0 = xm-x; y0 = ym+y;
-      if (inbounds(pic,.{x0,y0})) {
-        idx = @intCast(usize, x0 + nx*y0);
-        pic.img[idx] = val;
-      }
-      x0 = xm+x; y0 = ym+y;
-      if (inbounds(pic,.{x0,y0})) {
-        idx = @intCast(usize, x0 + nx*y0);
-        pic.img[idx] = val;
-      }
-      x0 = xm-x; y0 = ym-y;
-      if (inbounds(pic,.{x0,y0})) {
-        idx = @intCast(usize, x0 + nx*y0);
-        pic.img[idx] = val;
-      }
-      x0 = xm+x; y0 = ym-y;
-      if (inbounds(pic,.{x0,y0})) {
-        idx = @intCast(usize, x0 + nx*y0);
-        pic.img[idx] = val;
-      }
-    
-      // setPixel(xm-x, ym+y); //                           /*   I. Quadrant +x +y */
-      // setPixel(xm-y, ym-x); //                           /*  II. Quadrant -x +y */
-      // setPixel(xm+x, ym-y); //                           /* III. Quadrant -x -y */
-      // setPixel(xm+y, ym+x); //                           /*  IV. Quadrant +x -y */
-      r = err;
-      if (r <= y) {y+=1; err += y*2+1;}           //  /* e_xy+e_y < 0 */
-      if (r > x or err > y) {
-        x += 1;
-        err += x*2+1;                          //  /* -> x-step now */
-      }                                           //  /* e_xy+e_x > 0 or no 2nd y-step */
-   }
-}
-
-
-
 
 // ignore Z-dim and faces for now... just plotvertices and edges using XY 
 pub fn drawMeshXY(surf:Mesh, picname:[]const u8) !Img2D(f32) {
@@ -401,24 +287,32 @@ pub fn drawMeshXY(surf:Mesh, picname:[]const u8) !Img2D(f32) {
   return canvas;
 }
 
-test "drawing. make a grid lattice in B&W and color" {
-  // pub fn main() !void {
-  try mkdirIgnoreExists("BlackAndWhiteLattice");
-  const gs = try gridMesh(100,100);
-  const dt = Vec3{0,0,0.1};
-  for (gs.vs) |_,i| {
-    gs.vs[i] += geo.randNormalVec3() * dt;
-  }
-  defer gs.deinit();
-  const img = try drawMeshXY(gs,"latticemesh_img.tga");
-  try drawMesh3DMovie2(gs,"BlackAndWhiteLattice/img");
-  var imgu8 = try allocator.alloc(u8,img.img.len);
-  for (imgu8) |_,i| imgu8[i] = if (img.img[i]>0) 1 else 0;
-  const res = try fillImg2D(imgu8,img.nx,img.ny);
-  for (res.img) |*v| v.* = v.* % 999;
-  const res2 = try randomColorLabels(allocator,u16,res.img);
-  try im.saveU8AsTGA(res2,@intCast(u16,img.ny),@intCast(u16,img.nx),"surface_colored.tga");
-}
+// test "drawing. make a grid lattice in B&W and color" {
+//   // try mkdirIgnoreExists("BlackAndWhiteLattice");
+//   const gs = try gridMesh(100,100);
+//   defer gs.deinit();
+  
+//   const dt = Vec3{0,0,0.1};
+//   for (gs.vs) |_,i| {
+//     gs.vs[i] += geo.randNormalVec3() * dt;
+//   }
+//   const img = try drawMeshXY(gs, try join(test_home,"latticemesh_img.tga"));
+//   defer img.deinit();
+
+//   try drawMesh3DMovie2(gs, try join(test_home, "BlackAndWhiteLattice/img"));
+//   var imgu8 = try allocator.alloc(u8,img.img.len);
+//   defer allocator.free(imgu8);
+
+//   for (imgu8) |_,i| imgu8[i] = if (img.img[i]>0) 1 else 0;
+//   const res = try fillImg2D(imgu8,img.nx,img.ny);
+//   defer toys.allocator.free(res.img);
+
+//   for (res.img) |*v| v.* = v.* % 999;
+//   const res2 = try randomColorLabels(allocator,u16,res.img);
+//   defer allocator.free(res2);
+
+//   try im.saveU8AsTGA(res2,@intCast(u16,img.ny),@intCast(u16,img.nx), try join(test_home,"surface_colored.tga"));
+// }
 
 
 
@@ -622,6 +516,7 @@ fn renderFilledQuad(_img:Img2D(f32) , _quad:[4][2]u32) void {
 test "drawing. render filled tri and quad"{
   // pub fn main() !void {
   var img = try Img2D(f32).init(100,100);
+  defer img.deinit();
   const tri = .{.{0,0} , .{10,50} , .{50,0}};
   renderFilledTri(img,tri);
 
@@ -629,7 +524,7 @@ test "drawing. render filled tri and quad"{
   img.img[50*img.nx + 10] = 2;
   img.img[0*img.nx + 50] = 2;
 
-  try im.saveF32Img2D(img , "filledtri.tga");
+  try im.saveF32Img2D(img , test_home++"filledtri.tga");
 
   const quad = .{.{60,60} , .{65,60} , .{65,65} , .{60,65}};
   renderFilledQuad(img,quad);
@@ -639,7 +534,7 @@ test "drawing. render filled tri and quad"{
   img.img[60*img.nx + 65] = 2;
   img.img[65*img.nx + 65] = 2;
 
-  try im.saveF32Img2D(img , "filledquad.tga");
+  try im.saveF32Img2D(img , test_home++"filledquad.tga");
 }
 
 
