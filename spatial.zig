@@ -1,5 +1,5 @@
 const std = @import("std");
-const im = @import("imageBase.zig");
+const im  = @import("imageBase.zig");
 const geo = @import("geometry.zig");
 
 const print     = std.debug.print;
@@ -76,6 +76,11 @@ test "spatial. GridHash" {
 /// points in [min + n*dx,min + (n+1)*dx) → grid[n]
 /// therefore, a point at x' maps to floor((x'-xmin)/dx)
 /// How can we efficiently figure out nx? That's tricky. If we have a radius constraint for NN checks, then it should just be the radius.
+
+/// MORE: See [Geometric Hashing](https://en.wikipedia.org/wiki/Geometric_hashing) as a potential
+/// way to make representation more compact, but with more indirection.
+
+
 
 // Prealloc idx and dist memory for fast multiple queries
 const IdsDists = struct{
@@ -194,7 +199,7 @@ const GridHash = struct {
     return @intCast(u32,ix);
   }
 
-
+  /// returns slice of map. do not modify!
   pub fn neibs(self:Self, p:Vec2) []Elem {
     // const ixiy = pt2grid(p,self.bb,self.nx,self.ny);
     // const ix=ixiy[0];
@@ -255,14 +260,56 @@ const GridHash = struct {
     // nn_ids = al.shrink(nn_ids,nn_count);
     // dists = al.shrink(dists,nn_count);
     // return IdsDists{.ids=nn_ids , .dists=dists};
-
   }
+
+  // Write in-place to res_elems. no alloc required. assert k=knn.len
+  // pub fn knn(self:Self, p:Vec2, comptime k:u8, res_elems:[]u16) !void {
+
+  //   const ix_start = x2grid(p[0], self.bb.x, self.nx);
+  //   const iy_start = x2grid(p[1], self.bb.y, self.ny);
+
+  //   var elems:[2*k]u16 = undefined;
+  //   var dists:[2*k]f32 = undefined;
+
+  //   var nn_count:usize = 0;
+  //   var k_count:u8 = 0;
+  //   var xid = ix_start;
+
+  //   var boxQ = std.Queue([2]u16); // box id
+
+  //   while (!boxQ.isEmpty()) {
+  //   var yid = iy_start;
+  //     const idx = (xid*self.ny + yid)*self.nelemax;
+  //     // print("idx {} \n", .{idx});
+  //     const bin = self.map[idx..idx+self.nelemax];
+  //     // print("p {} xid {} yid {} bin {d}\n", .{p,xid,yid,bin});
+  //     // print("neibs {d} \n", .{self.neibs(p)});
+  //     for (bin) |e_| {
+  //       const e = if (e_) |e| e else continue;
+  //       const pt_e = self.pts[e];
+  //       // const delta = p-pt_e;
+  //       // const mydist = @sqrt(@reduce(.Add,delta*delta));
+  //       const mydist = dist(Vec2, p, pt_e);
+
+  //       if (mydist<radius) {
+  //         // print("adding e={}\n",.{e});
+  //         nn_ids[nn_count] = e;
+  //         dists[nn_count] = mydist;
+  //         nn_count += 1;
+  //       }
+  //     }
+
+  //   }
+  //   }
+
+  //   res.n_ids.* = nn_count;
+  // }
 };
 
 
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
-pub fn pairwise_distances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
+pub fn pairwiseDistances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
   const na = a.len;
   const nb = b.len;
 
@@ -303,7 +350,7 @@ test "spatial. radius neibs" {
   defer res.deinit(allocator);
 
   // Prealloc pdneibs buffer;
-  const pairdist = try pairwise_distances(allocator,Vec2,pts[0..],pts[0..]);
+  const pairdist = try pairwiseDistances(allocator,Vec2,pts[0..],pts[0..]);
   defer allocator.free(pairdist);
 
   var buf = try allocator.alloc(u16,200);
@@ -434,5 +481,13 @@ test "spatial. radius speed test" {
   // print("\n\nstd...{d}\n", .{stddev});
 }
 
+
+/// TODO:
+/// https://en.wikipedia.org/wiki/Geometric_hashing
+///
+/// Instead of keeping a dense array of grid locations we use an actual _hash_ function.
+/// GridHash doesn't actually hash! The GeometricHash uses the same Affine Translation + Quantization, but 
+/// then adds a Hash from the quantized coordinates to the object list e.g. [2]u8→[n]Obj
+const GeometricHash = struct {};
 
 

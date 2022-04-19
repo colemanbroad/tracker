@@ -1,5 +1,10 @@
 
 
+pub fn thisDir() []const u8 {
+    return std.fs.path.dirname(@src().file) orelse ".";
+}
+
+
 // no c deps. minimal old code.
 test {
 

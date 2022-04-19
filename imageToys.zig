@@ -145,36 +145,6 @@ test "imageToys. test orthProj()" {
 
 
 
-// computes derivative from current state of lorenz system
-// NOTE: sig=10 rho=28 beta=8/3 give cool manifold
-fn lorenzEquation(xyz:Vec3 , sig:f32 , rho:f32 , beta:f32 ) Vec3 {
-  const x = xyz[0];
-  const y = xyz[1];
-  const z = xyz[2];
-
-  const dx = sig*(y-x);
-  const dy = x*(rho-z) - y;
-  const dz = x*y - beta*z;
-
-  return Vec3{dx,dy,dz};
-}
-
-// for building small, stack-sized arrays returned by value.
-// TODO: Is there a way to use this same function for producing runtime arrays?
-// Or, is there a way of evaluating the runtime version of this function at comptime and getting
-// an array instead of a slice ? 
-fn nparange(comptime T:type , comptime low:T , comptime hi:T , comptime inc:T) blk: {
-    const n = @floatToInt(u16,(hi-low)/inc + 1);
-    break :blk [n]T;
-}
-  {
-  const n = @floatToInt(u16,(hi-low)/inc + 1);
-  var arr:[n]T = undefined;
-  for (arr) |*v,i| v.* = low + @intToFloat(f32,i)*inc;
-  return arr;
-}
-
-
 
 
 
@@ -220,6 +190,7 @@ pub fn sum(comptime n: u8, T:type, vals:[][n]T) [n]T {
   return res;
 }
 
+// in place isotropic translate & scale to fit in [0,nx] x [0,ny] box.
 pub fn fitboxiso(verts:[][2]f32 , nx:u32 , ny:u32) void {
 
   const xborder = 0.05 * @intToFloat(f32,nx);
@@ -1048,8 +1019,8 @@ pub fn printPixelValueCounts(img: []u16) !void{
 
 // 2D disk sampling. caller owns returned memory.
 // pub fn random2DPoints(npts:u32) ![]Vec2 {
-pub fn main() !void {
-// test "imageToys. 2d stratified sampling and radial distribution function" {
+// pub fn main() !void {
+test "imageToys. 2d stratified sampling and radial distribution function" {
 
   // const t = tracy.trace(@src(), null);
   // defer t.end();
@@ -1212,69 +1183,6 @@ test "imageToys. render BoxPoly and filled cube" {
 }
 
 
-test "imageToys. spinning lorenz attractor" {
-  // pub fn main() !void {
-  var state0 = Vec3{1.0, 1.0, 1.0};
-  const dt = 0.001;
-  var times  = nparange(f32,0,40,dt);
-  // var state1 = state0;
-
-  var history = try allocator.alloc(Vec3,times.len);
-  defer allocator.free(history);
-
-  // simplest possible integration
-  for (times) |_,i| {
-    history[i] = state0;
-    const dv = lorenzEquation(state0,10,28,8/3);
-    state0 += dv * Vec3{dt,dt,dt};
-  }
-
-  // Draw Lorenz Attractor in 2D in three xy,xz,yz projections
-  var pts:[2*times.len]f32 = undefined;
-  for (history) |v,i| {
-    pts[2*i] = v[0];
-    pts[2*i+1] = v[1];
-  }
-  try draw.drawPoints2D(f32,pts[0..],"lorenzXY.tga",true);
-  for (history) |v,i| {
-    pts[2*i] = v[0];
-    pts[2*i+1] = v[2];
-  }
-  try draw.drawPoints2D(f32,pts[0..],"lorenzXZ.tga",true);
-  for (history) |v,i| {
-    pts[2*i] = v[1];
-    pts[2*i+1] = v[2];
-  }
-  try draw.drawPoints2D(f32,pts[0..],"lorenzYZ.tga",true);
-
-
-  try mkdirIgnoreExists("lorenzSpin");
-
-  // focus on center of manifold 3D bounding box, define camera trajectory in 3D
-  const bds = geo.bounds3(history); 
-  const focus = (bds[1] + bds[0]) / Vec3{2,2,2};
-  const spin = sphereTrajectory();
-  var name = try allocator.alloc(u8,40);
-  defer allocator.free(name);
-  for (spin) |campt,j| {
-
-    // project from 3d->2d with perspective, draw lines in 2d, then save
-    var cam = try PerspectiveCamera.init(campt*Vec3{300,300,300}, focus, 1600, 900, null, );
-    defer cam.deinit();
-    cc.bres.init(&cam.screen[0],&cam.nyPixels,&cam.nxPixels);
-    for (history) |pt,i| {
-      const px = cam.world2pix(pt);
-      cc.bres.setPixel(@intCast(i32,px.x),@intCast(i32,px.y));
-      if (i>0) {
-        const px0 = cam.world2pix(history[i-1]);
-        cc.bres.plotLine(@intCast(i32,px0.x),@intCast(i32,px0.y),@intCast(i32,px.x),@intCast(i32,px.y));
-      }
-    }
-    name = try std.fmt.bufPrint(name, "lorenzSpin/img{:0>4}.tga", .{j});
-    try im.saveF32AsTGAGreyNormedCam(cam, name);
-
-  }
-}
 
 
 // Writes pixel values on curve to 1.0

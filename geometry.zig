@@ -110,6 +110,21 @@ pub const Mesh = struct {
   }
 };
 
+// faces are composed of 4 vertices
+pub const Mesh2D = struct {
+
+  const This = @This();
+  vs:[]Vec2,
+  es:[][2]u32,
+  fs:?[][4]u32,
+
+  pub fn deinit(this:This) void {
+    allocator.free(this.vs);
+    allocator.free(this.es);
+    if (this.fs) |fs| allocator.free(fs);
+  }
+};
+
 pub const Range = struct{hi:f32,lo:f32};
 pub const BBox  = struct{x:Range,y:Range};
 

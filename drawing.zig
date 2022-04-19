@@ -15,7 +15,6 @@ const sphereTrajectory  = geo.sphereTrajectory;
 const rotate2cam        = cam3D.rotate2cam;
 const PerspectiveCamera = cam3D.PerspectiveCamera;
 
-
 pub inline fn inbounds(img:anytype , px:anytype) bool {
   if (0 <= px[0] and px[0]<img.nx and 0 <= px[1] and px[1]<img.ny) return true else return false;
 }
@@ -95,6 +94,12 @@ test {std.testing.refAllDecls(@This()); }
 //   }
 // }
 
+const Mesh2D = geo.Mesh2D;
+
+// render mesh on top of pic. all white. fill in lines and faces. pure zig.
+pub fn drawMesh2D(mesh:Mesh2D , pic:Img2D([4]u8)) !void {
+
+}
 
 // render a 3D surface from a spiral trajectory
 pub fn drawMesh3DMovie2(surf:Mesh, name:[]const u8) !void {
@@ -147,8 +152,7 @@ pub fn drawPoints2D(comptime T: type, points2D:[]T, picname:[]const u8, lines:bo
   // prepare canvas
   var nx:u32 = 2880;
   var ny:u32 = 1800;
-  // var canvas = try allocator.alloc(u8,4*nx*ny);
-  // for (canvas) |*v,i| v.* = if (i%4==3) 255 else 0;
+
   var canvas = try allocator.alloc(f32,nx*ny);
   for (canvas) |*v| v.* = 0; //if (i%4==3) 255 else 0;
 
@@ -313,6 +317,9 @@ pub fn drawMeshXY(surf:Mesh, picname:[]const u8) !Img2D(f32) {
 
 //   try im.saveU8AsTGA(res2,@intCast(u16,img.ny),@intCast(u16,img.nx), try join(test_home,"surface_colored.tga"));
 // }
+
+
+
 
 
 

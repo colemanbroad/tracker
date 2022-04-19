@@ -1,9 +1,9 @@
 const std = @import("std");
 const im = @import("imageBase.zig");
-const cc = @import("c.zig");
+// const cc = @import("c.zig");
 
 const geo = @import("geometry.zig");
-const draw = @import("drawing.zig");
+const draw = @import("drawingBasic.zig");
 
 var allocator = std.testing.allocator;
 var prng = std.rand.DefaultPrng.init(0);
@@ -23,10 +23,14 @@ const Vec2 = geo.Vec2;
 const Vector = std.meta.Vector;
 const del = @import("delaunay.zig");
 
-const home = @import("tester.zig").test_path ++ "/delaunay_image/";
+// const home = @import("tester.zig").test_path ++ "/delaunay_image/";
+const home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/delaunay_image/";
+
+test {std.testing.refAllDecls(@This()); }
+
 
 // pub fn main() !void {
-test "delaunay triangulation in 2D" {
+test "delaunay_image. triangulation in 2D" {
     badtrianglesGlobal = try std.ArrayList(usize).initCapacity(allocator, 100);
     defer badtrianglesGlobal.deinit();
 
@@ -40,7 +44,7 @@ test "delaunay triangulation in 2D" {
     // const npts_str = arg_it.next() orelse "100";
     // const nparticles = try std.fmt.parseUnsigned(usize, npts_str, 10);
 
-    const nparticles = if (@import("builtin").is_test) 100 else blk: {
+    const nparticles = if (@import("builtin").is_test) 1000 else blk: {
         var arg_it = try process.argsWithAllocator(allocator);
         _ = arg_it.skip(); // skip exe name
         const npts_str = arg_it.next() orelse "100";
@@ -62,7 +66,7 @@ test "delaunay triangulation in 2D" {
     }
 
     // perform delaunay triangulation
-    const triangles = try del.delaunay2dal(allocator, verts);
+    const triangles = try del.delaunay2d(allocator, verts);
     defer allocator.free(triangles);
 
     // draw the triangulation

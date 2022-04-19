@@ -60,7 +60,7 @@ test "strain tracking" {
 
   // try mkdirIgnoreExists("strain");
 
-  const b2a = try strain_track(va[0..],vb[0..]);
+  const b2a = try strainTrack(va[0..],vb[0..]);
   defer allocator.free(b2a);
 
   var res:[nb]i32 = undefined;
@@ -92,7 +92,7 @@ export fn strain_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 
   const vb_ = allocator.alloc(Pts,nb) catch return -1;
   for (vb_) |*v,i| v.* = Pts{vb[2*i], vb[2*i+1]};
 
-  const b2a = strain_track(va_,vb_) catch return -1;
+  const b2a = strainTrack(va_,vb_) catch return -1;
   defer allocator.free(b2a);
 
   // Write the result to RES in-place
@@ -123,7 +123,7 @@ pub fn minmaxPts(arr:[]Pts) [4]f32 {
 }
 
 
-fn ask_user() !i64 {
+fn askUser() !i64 {
 
   if (@import("builtin").is_test) return 0;
 
@@ -141,7 +141,7 @@ fn ask_user() !i64 {
   return 1;
 }
 
-pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
+pub fn strainTrack(va:[]Pts, vb:[]Pts) ![]?u32 {
 
   // const stdin = std.io.getStdIn();
 
@@ -183,12 +183,12 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
   defer allocator.free(b_status);
   for (b_status) |*v| v.* = .unknown;
 
-  const cost = try pairwise_distances(allocator,Pts,va[0..],vb[0..]);
+  const cost = try pairwiseDistances(allocator,Pts,va[0..],vb[0..]);
   defer allocator.free(cost);
 
   // get delaunay triangles
   // FIXME 2D only for now
-  const triangles = try del.delaunay2dal(allocator,va[0..]);
+  const triangles = try del.delaunay2d(allocator,va[0..]);
   defer allocator.free(triangles);
 
   // print("\n",.{});
@@ -371,7 +371,7 @@ pub fn strain_track(va:[]Pts, vb:[]Pts) ![]?u32 {
     }
 
     try im.saveRGBA(pic , test_home++"strain-test-2.tga");
-    const userval = try ask_user();
+    const userval = try askUser();
     if (userval==0) break;
 
   }
@@ -410,7 +410,7 @@ test "track. greedy Strain Tracking 2D" {
   var vb:[nb]Pts = undefined;
   for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
 
-  const b2a = try strain_track(va[0..],vb[0..]);
+  const b2a = try strainTrack(va[0..],vb[0..]);
   defer allocator.free(b2a);
 }
 
@@ -442,7 +442,7 @@ test "track. greedy min-cost tracking 3D" {
   var vb:[nb]Pts3 = undefined;
   for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10, random.float(f32)*10};
 
-  const parents = try greedy_track(Pts3,va[0..],vb[0..]);
+  const parents = try greedyTrack(Pts3,va[0..],vb[0..]);
   defer allocator.free(parents);
 }
 
@@ -458,7 +458,7 @@ test "track. greedy min-cost tracking 2D" {
   var vb:[nb]Pts = undefined;
   for (vb) |*v| v.* = .{random.float(f32)*10, random.float(f32)*10 };
 
-  const parents = try greedy_track(Pts,va[0..],vb[0..]);
+  const parents = try greedyTrack(Pts,va[0..],vb[0..]);
   defer allocator.free(parents);
 }
 
@@ -470,7 +470,7 @@ export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 
   const vb_ = allocator.alloc(Pts,nb) catch return -1;
   for (vb_) |*v,i| v.* = Pts{vb[2*i], vb[2*i+1]};
 
-  const parents = greedy_track(Pts,va_,vb_) catch return -1;
+  const parents = greedyTrack(Pts,va_,vb_) catch return -1;
   defer allocator.free(parents);
 
   for (parents) |p,i| res[i] = p;
@@ -478,7 +478,7 @@ export fn greedy_track2d(va:[*]f32, na:u32 , vb:[*]f32, nb:u32, res:[*]i32) i32 
   return 0;
 }
 
-pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
+pub fn greedyTrack(comptime T:type, va:[]T,vb:[]T) ![]i32 {
 
   const na = va.len;
   const nb = vb.len;
@@ -493,7 +493,7 @@ pub fn greedy_track(comptime T:type, va:[]T,vb:[]T) ![]i32 {
   defer allocator.free(bin);
   for (bin) |*v| v.* = 0;
 
-  const cost = try pairwise_distances(allocator,T,va[0..],vb[0..]);
+  const cost = try pairwiseDistances(allocator,T,va[0..],vb[0..]);
   defer allocator.free(cost);
 
   var asgn = try allocator.alloc(u8,na*nb);
@@ -561,7 +561,7 @@ fn ltCostEdgePair(context: void, a: CostEdgePair, b: CostEdgePair) std.math.Orde
 }
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
-pub fn pairwise_distances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
+pub fn pairwiseDistances(al:Allocator,comptime T:type, a:[]T, b:[]T) ![]f32 {
   const na = a.len;
   const nb = b.len;
 
@@ -590,8 +590,4 @@ fn gtTNeibsAssigned(context: void, a: TNeibsAssigned, b: TNeibsAssigned) std.mat
   _ = context;
   return std.math.order(a.nneibs, b.nneibs);
 }
-
-
-
-
 
