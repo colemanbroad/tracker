@@ -1,22 +1,4 @@
-// still need to do: be able to add points and detect intersection with BBoxes.
-// to construct a tree i pass in a list of BBoxes and get back a tree.
-// i can query the tree with a new point / bbox and determine containment / overlap.
-// i can add new bboxes to the tree.
-
-// Q: is it _enough_ to determine bbox containment for the purpose of delaunay construction?
-//    The bounding box of a triangle is is not contained within the bounding circle (or vice versa).
-//    To find a tri that contains pt p, we can still construct a tree that branches tris by centroid location,
-//    then once we've found tri with closes centroid location to `p` we can search backwards through tree.
-//    We only need to find one hit for Delaunay. Then we can do the remaining search in the triangle graph (voronoi graph).
-//    
-
-// 
-
-
-
-fn construct(a:Allocator , pts:[]Vec2 ) !*TreeNode {
-
-}
+/// This tree doesn't hold any points or have any automated construction method based on points.
 
 const std = @import("std");
 // var allo = std.testing.allocator;

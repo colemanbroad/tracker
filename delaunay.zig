@@ -62,7 +62,7 @@ fn lessThanDist(p0: Vec2, p_l: Vec2, p_r: Vec2) bool {
 
 
 const Edge = [2]u32;
-const Tri = [3]u32;
+pub const Tri = [3]u32;
 
 
 
@@ -75,6 +75,34 @@ const Tri = [3]u32;
 ///        see [Bounding Volume Hierarchies](https://en.wikipedia.org/wiki/Bounding_volume_hierarchy)
 ///        see [R-tree](https://en.wikipedia.org/wiki/R-tree) and variants
 /// Ideas: same, but with spatial grid. we may have to increase the grid density over time...
+///        gridhash points. map points →  triangles. search through nearest points until find a conflict triangle
+///        update 
+/// Ideas: Keep a rasterized version of the triangle grid (i.e. an image!) on hand at all times, with pixel labeled by triangle id!
+///        then we'll immediately know which triangle we're in!
+/// Ideas: even better than that, keep essentially a grid hash at a high density, but fill each bucket with triangle id if it intersects at all!
+///        then we can just do a single sweep each time we add a triangle to add it to the grid. 
+/// Ideas: we _could_ actually increase the density of the GridHash over time. too many bins = many bins / tri. still easy to get tri from pt.
+///        but too few bins = many tris / bin. very little savings.
+
+// list of grid coordinates which overlap tri
+fn triToGridBoxes(grid:GridHash , tri:Tri) [][2]u32 {}
+
+// add tri to each grid bucket where it has some overlap (use triToGridBoxes). need geometrical test to determine buckets from tri pts.
+fn addTriToGrid(grid:GridHash , tri:Tri, tripts:[3]Vec2) !void {}    
+
+// find tris in pt bucket, then test each for overlap. we don't need to search other grids!
+fn getOverlappingTri(grid:GridHash, pt:Vec2) !Tri {}
+
+// use triToGridBoxes to compute grid boxes from tris. remove bad tris from those boxes directly.
+fn removeTrisFromGrid(grid:GridHash , tris:[]Tri) !void {}
+
+// for (points) |p| (nearby pts first)
+//   tri0 = getOverlappingTri
+//   add tri0 to tri_queue
+//   while (tri_queue.next()) |tri_next|
+//     mark all invalid
+//   
+
 
 /// Implementation of Bowyer-Watson algorithm for 2D tessellations
 /// SORTS _PTS IN PLACE !
