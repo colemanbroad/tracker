@@ -1,5 +1,4 @@
 /// This tree doesn't hold any points or have any automated construction method based on points.
-
 const std = @import("std");
 // var allo = std.testing.allocator;
 // var allocator = std.heap.c_allocator;
@@ -11,13 +10,12 @@ const Allocator = std.mem.Allocator;
 const Vec2 = geo.Vec2;
 
 test "alloc and free" {
-    const tn = try allocator.alloc(TreeNode,1);
+    const tn = try allocator.alloc(TreeNode, 1);
     defer allocator.free(tn);
 
     const tn2 = try allocator.create(TreeNode);
     defer allocator.destroy(tn2);
 }
-
 
 const TreeNode = struct {
     tl: ?*TreeNode,
@@ -25,13 +23,13 @@ const TreeNode = struct {
     bl: ?*TreeNode,
     br: ?*TreeNode,
 
-    pub fn new(a: Allocator, 
-                tl: ?*TreeNode,
-                tr: ?*TreeNode,
-                bl: ?*TreeNode,
-                br: ?*TreeNode,
-        ) !*TreeNode {
-        
+    pub fn new(
+        a: Allocator,
+        tl: ?*TreeNode,
+        tr: ?*TreeNode,
+        bl: ?*TreeNode,
+        br: ?*TreeNode,
+    ) !*TreeNode {
         var node = try a.create(TreeNode);
         node.tl = tl;
         node.tr = tr;
@@ -43,19 +41,18 @@ const TreeNode = struct {
     pub fn free(self: *TreeNode, a: Allocator) void {
         a.destroy(self);
     }
-
 };
 
 /// count nodes in tree. include root!
 fn itemCheck(node: *TreeNode) usize {
-    var res:usize = 0;
+    var res: usize = 0;
 
     if (node.tl) |x| res += 1 + itemCheck(x);
     if (node.tr) |x| res += 1 + itemCheck(x);
     if (node.bl) |x| res += 1 + itemCheck(x);
     if (node.br) |x| res += 1 + itemCheck(x);
 
-    return res+1;
+    return res + 1;
 }
 
 fn bottomUpTree(a: Allocator, depth: usize) Allocator.Error!*TreeNode {
@@ -65,9 +62,21 @@ fn bottomUpTree(a: Allocator, depth: usize) Allocator.Error!*TreeNode {
         const bl = try bottomUpTree(a, depth - 1);
         const br = try bottomUpTree(a, depth - 1);
 
-        return try TreeNode.new(a, tl, tr, bl, br, );
+        return try TreeNode.new(
+            a,
+            tl,
+            tr,
+            bl,
+            br,
+        );
     } else {
-        return try TreeNode.new(a, null, null, null, null, );
+        return try TreeNode.new(
+            a,
+            null,
+            null,
+            null,
+            null,
+        );
     }
 }
 
@@ -79,7 +88,6 @@ fn deleteTree(a: Allocator, node: *TreeNode) void {
     a.destroy(node);
 }
 
-
 // pub fn main() !void {
 test "trees. build tree and count nodes" {
 
@@ -88,14 +96,14 @@ test "trees. build tree and count nodes" {
     // const n = try std.fmt.parseUnsigned(u8, args.next().?, 10);
     const n = 4;
 
-    print("sum = {}\n" , .{4*4*4*4*4 + 4*4*4*4 + 4*4*4 + 4*4 + 4 + 1});
+    print("sum = {}\n", .{4 * 4 * 4 * 4 * 4 + 4 * 4 * 4 * 4 + 4 * 4 * 4 + 4 * 4 + 4 + 1});
 
     const min_depth: usize = 4;
     const max_depth: usize = n;
     const stretch_depth = max_depth + 1;
 
     const stretch_tree = try bottomUpTree(allocator, stretch_depth);
-    print("depth {}, check {}\n", .{stretch_depth, itemCheck(stretch_tree)});
+    print("depth {}, check {}\n", .{ stretch_depth, itemCheck(stretch_tree) });
     deleteTree(allocator, stretch_tree);
 
     const long_lived_tree = try bottomUpTree(allocator, max_depth);
@@ -111,9 +119,9 @@ test "trees. build tree and count nodes" {
             deleteTree(allocator, temp_tree);
         }
 
-        print("{} trees of depth {}, check {}\n", .{iterations, depth, check});
+        print("{} trees of depth {}, check {}\n", .{ iterations, depth, check });
     }
 
-    print("long lived tree of depth {}, check {}\n", .{max_depth, itemCheck(long_lived_tree)});
+    print("long lived tree of depth {}, check {}\n", .{ max_depth, itemCheck(long_lived_tree) });
     deleteTree(allocator, long_lived_tree);
 }

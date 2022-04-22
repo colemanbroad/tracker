@@ -28,7 +28,6 @@ const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/Trian
 
 // test {std.testing.refAllDecls(@This());}
 
-
 /// Ideas: spatial tree that maps points to nearby triangles & supports O(1) insert and removal
 ///        except it's a bounding-box tree because triangles have a volume... 
 ///        see [Bounding Volume Hierarchies](https://en.wikipedia.org/wiki/Bounding_volume_hierarchy)

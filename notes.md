@@ -21,20 +21,22 @@
 - [x] Evaluate actual tracking performance
 - [x] replace O(n^2)-space container for temporal edges
 - [x] fast spatial nn data struct. grid hash. 
+- [ ] routines to rasterize continuous shapes
 - [ ] show flow direction in tracking images
-- [ ] pixel-perfect precision in `drawCircle`
 - [ ] Speed up delaunay
 - [ ] delaunay 3D
-- [ ] use spatial.zig for temporal edge graph
+- [ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
+- [ ] use grid_hash for faster NN lookup when building DAG.
 - [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
 - [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
 
 - [ ] vector median filter to clean up _any_ tracking
 - [ ] Viterbi Alg, but efficient. Don't build whole array, just small graph.
-- [ ] geometric hash would work well for sparsely distributed cells in 3D, e.g. cells on surface of Tribolium.
+- [ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
 - [ ] StarryNite
 - [ ] Fast Matching
-- [ ] marching cubes
+- [ ] Marching cubes
+
 
 
 # Questions

@@ -33,10 +33,6 @@ pub fn build(b: *Builder) void {
     lib.setBuildMode(mode);
     lib.install();
 
-
-    
-
-
     // const run_cmd = exe.run();
     // run_cmd.step.dependOn(b.getInstallStep());
     // if (b.args) |args| {
@@ -47,7 +43,7 @@ pub fn build(b: *Builder) void {
     // run_step.dependOn(&run_cmd.step);
 }
 
-fn linkOpenCL(b: *Builder, exe : *LibExeObjStep) void {
+fn linkOpenCL(b: *Builder, exe: *LibExeObjStep) void {
     const mode = b.standardReleaseOptions();
     exe.setBuildMode(mode);
     exe.addIncludeDir("opencl-headers");
@@ -62,6 +58,6 @@ fn linkOpenCL(b: *Builder, exe : *LibExeObjStep) void {
     } else {
         exe.linkSystemLibrary("OpenCL");
     }
-    
+
     if (exe.kind != .Test) exe.install();
 }

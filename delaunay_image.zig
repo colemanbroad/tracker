@@ -26,8 +26,9 @@ const del = @import("delaunay.zig");
 // const home = @import("tester.zig").test_path ++ "/delaunay_image/";
 const home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/delaunay_image/";
 
-test {std.testing.refAllDecls(@This()); }
-
+test {
+    std.testing.refAllDecls(@This());
+}
 
 // pub fn main() !void {
 test "delaunay_image. triangulation in 2D" {

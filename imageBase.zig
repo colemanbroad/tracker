@@ -9,8 +9,9 @@ const Allocator = std.mem.Allocator;
 // var allocator = gpa.allocator();
 var allocator = std.testing.allocator;
 
-test {std.testing.refAllDecls(@This());}
-
+test {
+    std.testing.refAllDecls(@This());
+}
 
 pub fn Img2D(comptime T: type) type {
     return struct {
@@ -79,10 +80,9 @@ test "imageBase. Img3D Generic" {
     print("{}{}", .{ a1.nx, a2.nx });
 }
 
-pub inline fn inbounds(img:anytype , px:anytype) bool {
-  if (0 <= px[0] and px[0]<img.nx and 0 <= px[1] and px[1]<img.ny) return true else return false;
+pub inline fn inbounds(img: anytype, px: anytype) bool {
+    if (0 <= px[0] and px[0] < img.nx and 0 <= px[1] and px[1] < img.ny) return true else return false;
 }
-
 
 pub fn minmax(
     comptime T: type,
@@ -176,7 +176,6 @@ pub fn saveU8AsTGA(data: []u8, h: u16, w: u16, name: []const u8) !void {
     const dirname = std.fs.path.dirname(resolved);
     // const basename = std.fs.path.basename(resolved);
 
-
     // print("resolved : {s} \n" , .{resolved});
     // print("dirname : {s} \n" , .{dirname});
     // print("basename : {s} \n" , .{basename});
@@ -240,5 +239,3 @@ pub fn saveRGBA(pic: Img2D([4]u8), name: []const u8) !void {
     const w = @intCast(u16, pic.nx);
     try saveU8AsTGA(data, h, w, name);
 }
-
-

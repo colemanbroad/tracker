@@ -81,9 +81,12 @@ fn buildTree(a: Allocator, pts: []Pt, dim: XY) Allocator.Error!*KDNode {
     const median = pts[pts.len / 2];
 
     var node = try a.create(KDNode);
-    const next_split = switch (dim) {.X => XY.Y , .Y => XY.X};
+    const next_split = switch (dim) {
+        .X => XY.Y,
+        .Y => XY.X,
+    };
     node.l = try buildTree(a, pts[0..idx], next_split);
-    node.r = try buildTree(a, pts[idx + 1 ..],   next_split);
+    node.r = try buildTree(a, pts[idx + 1 ..], next_split);
     node.splt = median;
     node.vals = null;
     node.dim = dim;
@@ -106,7 +109,7 @@ fn findNearest(root: *KDNode, pt: Pt) Allocator.Error!Pt {
     var current = root;
 
     // descend down branches until we get to a leaf. keep track of nearest point at all times.
-    // In 2D we 
+    // In 2D we
     while (true) {
 
         // we've made it to a leaf node. almost done.
@@ -164,7 +167,7 @@ test "kdnode test" {
 
     var pts = try a.alloc(Pt, 13);
     defer a.free(pts);
-    for (pts) |*v| v.* = .{random.float(f32), random.float(f32)};
+    for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
     // std.sort.sort(f32, pts, {}, comptime std.sort.asc(f32));
     var q = try buildTree(a, pts[0..], .X);

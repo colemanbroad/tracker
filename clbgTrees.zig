@@ -66,7 +66,7 @@ pub fn main() !void {
     const stretch_depth = max_depth + 1;
 
     const stretch_tree = try bottomUpTree(allocator, stretch_depth);
-    print("depth {}, check {}\n", .{stretch_depth, itemCheck(stretch_tree)});
+    print("depth {}, check {}\n", .{ stretch_depth, itemCheck(stretch_tree) });
     deleteTree(allocator, stretch_tree);
 
     const long_lived_tree = try bottomUpTree(allocator, max_depth);
@@ -82,9 +82,9 @@ pub fn main() !void {
             deleteTree(allocator, temp_tree);
         }
 
-        print("{} trees of depth {}, check {}\n", .{iterations, depth, check});
+        print("{} trees of depth {}, check {}\n", .{ iterations, depth, check });
     }
 
-    print("long lived tree of depth {}, check {}\n", .{max_depth, itemCheck(long_lived_tree)});
+    print("long lived tree of depth {}, check {}\n", .{ max_depth, itemCheck(long_lived_tree) });
     deleteTree(allocator, long_lived_tree);
 }

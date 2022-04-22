@@ -14,7 +14,9 @@ const alloc = std.testing.allocator;
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
-test {std.testing.refAllDecls(@This()); }
+test {
+    std.testing.refAllDecls(@This());
+}
 
 test "delaunay. resize a thing" {
     var pts = try alloc.alloc(f32, 100);
@@ -58,7 +60,6 @@ fn lessThanDist(p0: Vec2, p_l: Vec2, p_r: Vec2) bool {
     if (d_l < d_r) return true else return false;
 }
 
-
 const Edge = [2]u32;
 pub const Tri = [3]u32;
 
@@ -72,13 +73,11 @@ pub const Tri = [3]u32;
 //   add tri0 to tri_queue
 //   while (tri_queue.next()) |tri_next|
 //     mark all invalid
-//   
-
+//
 
 /// Implementation of Bowyer-Watson algorithm for 2D tessellations
 /// SORTS _PTS IN PLACE !
 pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
-
     const bbox = geo.boundsBBox(_pts);
     const box_width = bbox.x.hi - bbox.x.lo;
     const box_height = bbox.y.hi - bbox.y.lo;
@@ -98,7 +97,6 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     pts[oldlen + 1] = .{ bbox.x.lo - box_width * 0.1, bbox.y.hi + 2 * box_height };
     pts[oldlen + 2] = .{ bbox.x.hi + 2 * box_width, bbox.y.lo - box_height * 0.1 };
 
-
     // pts is now FIXED. The memory doesn't change,
     // const PtIdx = u32;
 
@@ -116,7 +114,6 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     //          - rebuild GridHash on pts every time...
     //          - brute force until we get to sqrt(pts)... then grid hash.
 
-
     // Then need to map from points to triangles
     // var pt2tri = try allo.alloc([10]?Tria , pts.len);
     // defer allo.free(pt2tri);
@@ -131,13 +128,13 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     // defer triangle_neighbours.deinit();
 
     // keep only valid triangles
-    var triangles = std.AutoHashMap(Tri,void).init(allo);
+    var triangles = std.AutoHashMap(Tri, void).init(allo);
     defer triangles.deinit();
 
     // easy access to triangle neibs via edges
     // var edge_to_tri = std.AutoHashMap(Edge,[2]?Tria).init(allo);
     // defer edge_to_tri.deinit();
-    
+
     // queue to for triangle search
     // var search_queue   = std.Queue(Tria).init();
     // NO ALLOC REQUIRED
@@ -160,12 +157,10 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     var edgehash = std.AutoHashMap(Edge, u2).init(allo);
     defer edgehash.deinit();
 
-
     // Initialize with one big bounding triangle
     // triangles.appendAssumeCapacity(Tria{ oldlen + 0, oldlen + 1, oldlen + 2 });
-    const big_tri = Tri{oldlen + 0, oldlen + 1, oldlen + 2};
-    try triangles.put(big_tri,{});
-
+    const big_tri = Tri{ oldlen + 0, oldlen + 1, oldlen + 2 };
+    try triangles.put(big_tri, {});
 
     // MAIN LOOP OVER (nonboundary) POINTS
     for (pts[0 .. pts.len - 3]) |p, idx_pt| {
@@ -185,7 +180,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
         // 2. while q not empty
         // 3.   pop tri from q
         // 4.   if visited(tri) continue
-        // 5.   if tri contains pt: 
+        // 5.   if tri contains pt:
         //          add tri edges to edgelist
         //          add tri-neibs to q
         //          add tri to badtri
@@ -258,12 +253,10 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
             _ = triangles.remove(tri); // returns true on removal
         }
 
-
         for (polyedges.items) |edge| {
-
             const tri = Tri{ edge[0], edge[1], @intCast(u32, idx_pt) };
-            try triangles.put(tri,{});
-            
+            try triangles.put(tri, {});
+
             // const current_tris = edge_to_tri.get(edge);
             // if (current_tris==null) {
             //     edge_to_tri.put(.{tri,null});
@@ -339,7 +332,7 @@ test "delaunay. basic delaunay" {
     for (verts) |*v| v.* = .{ random.float(f32), random.float(f32) };
     defer alloc.free(verts); // changes size when we call delaunay2d() ...
 
-    const triangles = try delaunay2d(alloc,verts);
+    const triangles = try delaunay2d(alloc, verts);
     defer alloc.free(triangles);
 
     print("\n\nfound {} triangles on {} vertices\n", .{ triangles.len, nparticles });

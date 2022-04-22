@@ -13,7 +13,7 @@ pub const Frame = struct {
     }
 };
 
-pub fn frame(name: ?[*c]const u8) callconv(.Inline) Frame {
+pub inline fn frame(name: ?[*c]const u8) Frame {
     const f = Frame{
         .name = if (name) |n| n else null,
     };
@@ -29,7 +29,7 @@ pub const Ctx = struct {
     }
 };
 
-pub fn trace(comptime src: std.builtin.SourceLocation, name: ?[*c]const u8) callconv(.Inline) Ctx {
+pub inline fn trace(comptime src: std.builtin.SourceLocation, name: ?[*c]const u8) Ctx {
     const loc: c.___tracy_source_location_data = .{
         .name = if (name) |n| n else null,
         .function = src.fn_name.ptr,
