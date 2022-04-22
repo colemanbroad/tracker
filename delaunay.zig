@@ -1,12 +1,10 @@
 const std = @import("std");
 const geo = @import("geometry.zig");
-const GridHash = @import("spatial.zig").GridHash;
 
 pub const Vec2 = geo.Vec2;
 const max = std.math.max;
 const min = std.math.min;
 
-// const spatial = @import("spatial.zig");
 const print = std.debug.print;
 
 // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -64,37 +62,10 @@ fn lessThanDist(p0: Vec2, p_l: Vec2, p_r: Vec2) bool {
 const Edge = [2]u32;
 pub const Tri = [3]u32;
 
-
-
-
 /// Goal: speed up triangle checking
 /// Have: queue and technique iteration given first intersecting triangle
-/// Need: fast access to _any_ intersecting triangle.
-/// Ideas: spatial tree that maps points to nearby triangles & supports O(1) insert and removal
-///        except it's a bounding-box tree because triangles have a volume... 
-///        see [Bounding Volume Hierarchies](https://en.wikipedia.org/wiki/Bounding_volume_hierarchy)
-///        see [R-tree](https://en.wikipedia.org/wiki/R-tree) and variants
-/// Ideas: same, but with spatial grid. we may have to increase the grid density over time...
-///        gridhash points. map points →  triangles. search through nearest points until find a conflict triangle
-///        update 
-/// Ideas: Keep a rasterized version of the triangle grid (i.e. an image!) on hand at all times, with pixel labeled by triangle id!
-///        then we'll immediately know which triangle we're in!
-/// Ideas: even better than that, keep essentially a grid hash at a high density, but fill each bucket with triangle id if it intersects at all!
-///        then we can just do a single sweep each time we add a triangle to add it to the grid. 
-/// Ideas: we _could_ actually increase the density of the GridHash over time. too many bins = many bins / tri. still easy to get tri from pt.
-///        but too few bins = many tris / bin. very little savings.
-
-// list of grid coordinates which overlap tri
-fn triToGridBoxes(grid:GridHash , tri:Tri) [][2]u32 {}
-
-// add tri to each grid bucket where it has some overlap (use triToGridBoxes). need geometrical test to determine buckets from tri pts.
-fn addTriToGrid(grid:GridHash , tri:Tri, tripts:[3]Vec2) !void {}    
-
-// find tris in pt bucket, then test each for overlap. we don't need to search other grids!
-fn getOverlappingTri(grid:GridHash, pt:Vec2) !Tri {}
-
-// use triToGridBoxes to compute grid boxes from tris. remove bad tris from those boxes directly.
-fn removeTrisFromGrid(grid:GridHash , tris:[]Tri) !void {}
+/// Need: fast access to _any_ intersecting triangle. (see TriangleHash.zig)
+/// 
 
 // for (points) |p| (nearby pts first)
 //   tri0 = getOverlappingTri
@@ -126,7 +97,6 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     pts[oldlen + 0] = .{ bbox.x.lo - box_width * 0.1, bbox.y.lo - box_height * 0.1 };
     pts[oldlen + 1] = .{ bbox.x.lo - box_width * 0.1, bbox.y.hi + 2 * box_height };
     pts[oldlen + 2] = .{ bbox.x.hi + 2 * box_width, bbox.y.lo - box_height * 0.1 };
-
 
 
     // pts is now FIXED. The memory doesn't change,
