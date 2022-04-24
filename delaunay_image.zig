@@ -3,7 +3,7 @@ const im = @import("imageBase.zig");
 // const cc = @import("c.zig");
 
 const geo = @import("geometry.zig");
-const draw = @import("drawingBasic.zig");
+const draw = @import("drawing_basic.zig");
 
 var allocator = std.testing.allocator;
 var prng = std.rand.DefaultPrng.init(0);

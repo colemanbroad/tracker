@@ -99,12 +99,64 @@ pub fn traceCircleOutline(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Pix
     }
 }
 
+// TODO: rasterization is asymmetric. single pixel created in initial call to fnToRun() should be vertical line.
+pub fn traceCircleFilled(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Pix) void, circle: Circle) void {
+    const d_theta: f32 = 1 / circle.radius; // in radians 2pi / (2pi r)
+    const rr = Vec2{ circle.radius, circle.radius };
+
+    var currentAngle: f32 = 0;
+    var currentPoint = rr * Vec2{ @cos(currentAngle), @sin(currentAngle) } + circle.center;
+    var currentPix = pt2Pix(currentPoint);
+    fnToRun(ctx, currentPix);
+    var y = currentPix[1];
+
+    var x = currentPix[0];
+    var xprev = x;
+
+    while (true) {
+        currentAngle += d_theta;
+        currentPoint = rr * Vec2{ @cos(currentAngle), @sin(currentAngle) } + circle.center;
+        currentPix = pt2Pix(currentPoint);
+        x = currentPix[0];
+        if (x != xprev) {
+            y = currentPix[1];
+            const y_final = @floatToInt(u32, std.math.max(1, circle.center[1] + circle.radius * @sin(-currentAngle)));
+            print("{} → {}\n", .{ y, y_final });
+            while (y >= y_final) : (y -= 1) {
+                fnToRun(ctx, .{ x, y });
+            }
+        }
+        // if (@reduce(.Or,  oldPix != currentPix)) fnToRun(ctx, currentPix);
+        if (currentAngle > 1 * 3.14159) break;
+    }
+}
+
 // TESTING
 
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
 // pub fn main() !void {
+test "test traceCircleFilled" {
+    const nx = 1200;
+    const ny = 1000;
+    var pic = try Img2D([4]u8).init(nx, ny);
+    defer pic.deinit();
+
+    for (pic.img) |*v| v.* = .{ 0, 0, 0, 255 };
+
+    var count: u16 = 0;
+    const ctx: ImgCtx = .{ .img = pic, .val = .{ 64, 255, 0, 255 } };
+
+    while (count < 5) : (count += 1) {
+        const circle = Circle{ .center = .{ nx * random.float(f32), ny * random.float(f32) }, .radius = 5 + 50 * random.float(f32) };
+        traceCircleFilled(ctx, fnSetValImg, circle);
+    }
+
+    try im.saveRGBA(pic, test_home ++ "traceCircleFilled.tga");
+}
+
+
 test "test traceCircleOutline" {
     const nx = 1200;
     const ny = 1000;
@@ -116,7 +168,7 @@ test "test traceCircleOutline" {
     var count: u16 = 0;
     const ctx: ImgCtx = .{ .img = pic, .val = .{ 64, 255, 0, 255 } };
 
-    while (count < 100) : (count += 1) {
+    while (count < 500) : (count += 1) {
         const circle = Circle{ .center = .{ nx * random.float(f32), ny * random.float(f32) }, .radius = 5 + 50 * random.float(f32) };
         traceCircleOutline(ctx, fnSetValImg, circle);
     }
@@ -124,19 +176,18 @@ test "test traceCircleOutline" {
     try im.saveRGBA(pic, test_home ++ "traceCircleOutline.tga");
 }
 
+const BGRA = @Vector(4, u8);
 const ImgCtx = struct {
     img: Img2D([4]u8),
     val: BGRA,
 };
-
-const BGRA = @Vector(4, u8);
-
 fn fnSetValImg(ctx: ImgCtx, pix: Pix) void {
     const buf = ctx.img;
     const val2 = @intCast(u8, pix[0] % 255);
     if (pix[0] < 0 or pix[0] >= buf.nx or pix[1] < 0 or pix[1] >= buf.ny) return;
     const idx = pix[1] * buf.nx + pix[0];
     buf.img[idx] = ctx.val +% BGRA{ val2 *% 2, 0, 0, 0 };
+    // im.saveRGBA(ctx.img, test_home ++ "traceCircleFilled.tga") catch unreachable;
 }
 
 test "draw two lines" {

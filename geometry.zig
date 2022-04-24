@@ -893,8 +893,10 @@ pub fn pointInTriangle2d(pt: Vec2, tri: [3]Vec2) bool {
     if ((xa > 0 and xb > 0 and xc > 0) or (xa < 0 and xb < 0 and xc < 0)) return true else return false;
 }
 
+pub const CircleR2 = struct { pt: Vec2, r2: f32 };
+
 // see [matrix formula](https://en.wikipedia.org/wiki/Circumscribed_circle)
-pub fn getCircumcircle2d(tri: [3]Vec2) struct { pt: Vec2, r2: f32 } {
+pub fn getCircumcircle2d(tri: [3]Vec2) CircleR2 {
 
     // normalize for numerical reasons
     const center = (tri[0] + tri[1] + tri[2]) / Vec2{ 3.0, 3.0 };
@@ -935,7 +937,7 @@ pub fn getCircumcircle2d(tri: [3]Vec2) struct { pt: Vec2, r2: f32 } {
     return .{ .pt = centerpoint, .r2 = radiusSquared };
 }
 
-pub fn getCircumcircle2dv2(tri: [3]Vec2) struct { pt: Vec2, r2: f32 } {
+pub fn getCircumcircle2dv2(tri: [3]Vec2) CircleR2 {
     const d01 = (tri[1] - tri[0]) / Vec2{ 2, 2 };
     // const d12 = (tri[2] - tri[1]) / Vec2{2,2};
     const d20 = (tri[0] - tri[2]) / Vec2{ 2, 2 };

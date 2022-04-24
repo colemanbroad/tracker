@@ -5,8 +5,8 @@ const std = @import("std");
 const del = @import("delaunay.zig");
 const im = @import("imageBase.zig");
 
-const drawCircle = @import("drawingBasic.zig").drawCircle;
-const drawLineInBounds = @import("drawingBasic.zig").drawLineInBounds;
+const drawCircle = @import("drawing_basic.zig").drawCircle;
+const drawLineInBounds = @import("drawing_basic.zig").drawLineInBounds;
 
 const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;

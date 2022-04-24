@@ -47,3 +47,13 @@
 # topics
 
 ## Very Fast StrainCost Tracking
+
+## Rasterizing continuous shapes
+
+I could do everything my self in my own little rendered and try to get everything pixel perfect. Or I could try to use an SVG library. Or TinyVG.
+
+
+
+
+
+

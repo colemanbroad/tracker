@@ -11,6 +11,7 @@ const random = prng.random();
 
 const Allocator = std.mem.Allocator;
 const Vec2 = geo.Vec2;
+const Pix = @Vector(2, u32);
 const Vec3 = geo.Vec3;
 const Range = geo.Range;
 const BBox = geo.BBox;
@@ -91,6 +92,14 @@ const GridHash2 = struct {
         return .{ @floatToInt(i32, v[0]), @floatToInt(i32, v[1]) };
     }
 
+    fn gridCenter2World(self: Self, gridpt: V2u32) Vec2 {
+        // const gp = @as(V2u32,gridpt);
+        const gp = (pix2Vec2(gridpt) + Vec2{ 0.5, 0.5 }) * self.scale + self.offset;
+        return gp;
+        // const gp_world = gridpt
+
+    }
+
     // World coordinates
     fn getWc(self: Self, pt: Vec2) []?Elem {
         const pt_grid = self.world2grid(pt);
@@ -135,32 +144,25 @@ const GridHash2 = struct {
     }
 };
 
-fn floatCast(vec: V2u32) Vec2 {
-    return .{ @intToFloat(f32, vec[0]), @intToFloat(f32, vec[1]) };
+fn pix2Vec2(pt: Pix) Vec2 {
+    return Vec2{
+        @intToFloat(f32, pt[0]),
+        @intToFloat(f32, pt[1]),
+    };
 }
 
-pub fn main() !void {
-    print("\n", .{});
+const CircleR2 = geo.CircleR2;
 
-    // raw data
-    var pts = [_]Vec2{ .{ 0, 0 }, .{ 2.5, 2.5 }, .{ 2.5, 3 }, .{ 3, 2.5 }, .{ 7, 7 } };
-    // const tri = Tri{0,1,2};
+// To test if a realspace line intersects a grid box we CANT just take equally spaced samples along the line,
+// because we might skip a box if the intersection is very small.
 
-    var grid_hash = try GridHash2.init(allocator, pts[0..], 14, 14, 2);
-    defer grid_hash.deinit(allocator);
-
-    for (pts) |p| {
-        print("p,w(p) {d},{d}\n", .{ p, grid_hash.world2grid(p) });
-    }
-
-    // To test if a realspace line intersects a grid box we CANT just take equally spaced samples along the line,
-    // because we might skip a box if the intersection is very small.
-    // But we want to check for overlap with a circumcircle!
-    const ccircle = geo.getCircumcircle2dv2(pts[1..4].*);
-    print("{d:.3}\n", .{ccircle});
+// Add circle label to every box if box centroid is inside circle
+pub fn addCircleToGrid(grid_hash: GridHash2, ccircle: CircleR2, label: u8) void {
 
     // get bounding box in world coordinates
     const r = @sqrt(ccircle.r2);
+    // const circle = Circle{.center=ccircle.pt , .radius=r};
+
     const xmin = ccircle.pt[0] - r;
     const xmax = ccircle.pt[0] + r;
     const ymin = ccircle.pt[1] - r;
@@ -176,17 +178,74 @@ pub fn main() !void {
     var idx: u16 = 0;
     while (idx < nidx) : (idx += 1) {
         const pix = xy_min + V2u32{ idx / dxy[1], idx % dxy[1] };
-        const b = grid_hash.setPc(pix, 1);
+
+        if (!pixInCircle(grid_hash, pix, ccircle)) continue;
+        const b = grid_hash.setPc(pix, label);
         if (b == false) print("pix false {d}\n", .{pix});
     }
-
-    print("p      w(p)   gh(w(p)) \n", .{});
-    for (pts) |p| {
-        const wp = grid_hash.world2grid(p);
-        const res = grid_hash.getWc(p);
-        print("{d} {d} {d}\n", .{ p, wp, res });
-    }
 }
+
+const Circle = @import("rasterizer.zig").Circle;
+
+// To test if a circle intersects with a grid box we need to have both objects in continuous _grid_ coordinates (not world coords and not discrete).
+// There are multiple cases where an intersection might happen. Four cases where the circle overlaps one of the edges, but no corners, and four more cases where it overlaps a different corner.
+// We can reduce this test in the mean time to the simple case of overlap with the center of the grid.
+
+fn pixInCircle(grid: GridHash2, pix: V2u32, circle: CircleR2) bool {
+    const pix_in_world_coords = grid.gridCenter2World(pix);
+    // print("pix {d} , wc(pix) {d} , center {d}\n", .{pix , pix_in_world_coords , circle.pt});
+    const delta = pix_in_world_coords - circle.pt;
+    const distance = @reduce(.Add, delta * delta);
+    // print("distance^2 {} . r^2 {} \n", .{distance, circle.r2});
+    return distance < circle.r2;
+}
+
+pub fn main() !void {
+    print("\n", .{});
+
+    // raw data
+    // var pts = [_]Vec2{ .{ 0, 0 }, .{ 1.5, 1.5 }, .{ 2.5, 3 }, .{ 3, 2.5 }, .{ 7, 7 } };
+    var pts: [100]Vec2 = undefined;
+    for (pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
+
+    var grid_hash = try GridHash2.init(allocator, pts[0..], 140, 140, 2);
+    defer grid_hash.deinit(allocator);
+
+    const picture = try im.Img2D([4]u8).init(140, 140);
+    defer picture.deinit();
+
+    {
+        comptime var i: u16 = 0;
+        inline while (i < 3) : (i += 1) {
+            const ccircle = geo.getCircumcircle2dv2(pts[4 * i .. 4 * i + 3].*);
+            addCircleToGrid(grid_hash, ccircle, 100);
+        }
+    }
+
+    for (pts) |p| {
+        const gc = grid_hash.world2grid(p);
+        draw.drawCircleOutline(picture, @intCast(i32, gc[0]), @intCast(i32, gc[1]), 3, .{ 255, 255, 255, 255 });
+    }
+    try im.saveRGBA(picture, "trialpicture.tga");
+
+    // now draw filled in circles
+    var idx: u32 = 0;
+    while (idx < picture.nx * picture.ny) : (idx += 1) {
+        const gelems = grid_hash.grid[idx * grid_hash.nd .. (idx + 1) * grid_hash.nd];
+        const gel = if (gelems[0]) |g| g else continue;
+        picture.img[idx] = .{ gel, 0, gel, 255 };
+    }
+    try im.saveRGBA(picture, "trialpicture.tga");
+}
+
+fn vec2Pix(v: Vec2) Pix {
+    return Pix{
+        @floatToInt(u32, v[0]),
+        @floatToInt(u32, v[1]),
+    };
+}
+
+const draw = @import("drawing_basic.zig");
 
 // // list of grid coordinates which overlap tri
 // fn triToGridBoxes(grid:GridHash , tri:Tri) [][2]u32 {}

@@ -7,7 +7,7 @@ var allocator = std.testing.allocator;
 const print = std.debug.print;
 const assert = std.debug.assert;
 
-const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/drawingBasic/";
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/drawing_basic/";
 test {
     std.testing.refAllDecls(@This());
 }

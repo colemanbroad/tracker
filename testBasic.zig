@@ -7,7 +7,7 @@ test {
     _ = @import("cam3d.zig");
     _ = @import("delaunay.zig");
     _ = @import("imageBase.zig");
-    _ = @import("drawingBasic.zig");
+    _ = @import("drawing_basic.zig");
     _ = @import("geometry.zig");
     _ = @import("track.zig");
     _ = @import("spatial.zig");
