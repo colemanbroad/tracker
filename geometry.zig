@@ -200,13 +200,21 @@ pub const Mesh2D = struct {
         self.edge2tri.deinit();
     }
 
+    pub fn init(a:Allocator) !Self {
+        var s = Self{
+                .al = a ,
+                .vs = try std.ArrayList(Pt).initCapacity(a, 100)   ,
+                .ts = std.AutoHashMap(Tri, void).init(a),
+                .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a) ,
+            };
+        return s;
+    }
+
     pub fn initRand(a:Allocator) !Self {
 
         var s = Self{
                     .al = a ,
                     .vs = try std.ArrayList(Pt).initCapacity(a, 100)   ,
-                    // .es = try std.ArrayList(Edge).initCapacity(a, 100) ,
-                    // .ts = try std.ArrayList(?Tri).initCapacity(a, 100)  ,
                     .ts = std.AutoHashMap(Tri, void).init(a),
                     .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a) ,
                 };
@@ -219,21 +227,11 @@ pub const Mesh2D = struct {
             s.vs.appendAssumeCapacity(.{x,y});
         }}
 
-        // update edges
-        // s.es.appendAssumeCapacity(.{0,1});
-        // s.es.appendAssumeCapacity(.{0,2});
-        // s.es.appendAssumeCapacity(.{1,2});
-        // s.es.appendAssumeCapacity(.{1,3});
-        // s.es.appendAssumeCapacity(.{2,3});
-
         // update tri's
         try s.ts.put(Tri{0,1,2} , {});
         try s.ts.put(Tri{1,2,3} , {});
 
         // update edge→tri map
-
-        // try s.addTrisToEdgeMap(s.ts.items);
-
         try s.addTrisToEdgeMap(try s.validTris(a));
 
         return s;
@@ -420,8 +418,28 @@ pub const Mesh2D = struct {
         while (it_es.next()) |kv| {
             print("{d} → {d} \n",.{kv.key_ptr.* , kv.value_ptr.*});
         }
-
     }
+
+    // up to 3 neibs ? any of them can be null;
+    pub fn getTriNeibs(self:Self, tri:Tri) [3]?Tri {
+
+        const tri_canonical = sortTri(tri);
+        const a = tri_canonical[0];
+        const b = tri_canonical[1];
+        const c = tri_canonical[2];
+        var res:[3]?Tri = undefined;
+        res[0] = self.getSingleNeib(.{a,b});
+        res[1] = self.getSingleNeib(.{b,c});
+        res[2] = self.getSingleNeib(.{a,c});
+        return res;
+    }
+
+    pub fn getSingleNeib(self:Self, tri:Tri, edge:Edge) ?Tri {
+        const m2tris = self.edge2tri.get(edge);
+        if (eql(u32,&tri,&m2tris[0].?)) return m2tris[1];
+        return m2tris[0];
+    }
+    
 
     // pub fn walk(self:Self, start:Tri) 
 
