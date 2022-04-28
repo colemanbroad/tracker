@@ -29,6 +29,7 @@
 - [ ] use grid_hash for faster NN lookup when building DAG.
 - [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
 - [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
+- [ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
 
 - [ ] vector median filter to clean up _any_ tracking
 - [ ] Viterbi Alg, but efficient. Don't build whole array, just small graph.

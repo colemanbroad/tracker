@@ -3,6 +3,7 @@
 // GEOMETRY  GEOMETRY  GEOMETRY  GEOMETRY
 
 const std = @import("std");
+
 const print = std.debug.print;
 const assert = std.debug.assert;
 const expect = std.testing.expect;
@@ -24,6 +25,7 @@ test {
 pub fn randNormalVec3() Vec3 {
     return Vec3{ random.floatNorm(f32), random.floatNorm(f32), random.floatNorm(f32) };
 }
+
 pub fn randNormalVec2() Vec2 {
     return Vec2{ random.floatNorm(f32), random.floatNorm(f32) };
 }
@@ -112,19 +114,354 @@ pub const Mesh = struct {
     }
 };
 
-// faces are composed of 4 vertices
-pub const Mesh2D = struct {
-    const This = @This();
-    vs: []Vec2,
-    es: [][2]u32,
-    fs: ?[][4]u32,
+const Allocator = std.mem.Allocator;
 
-    pub fn deinit(this: This) void {
-        allocator.free(this.vs);
-        allocator.free(this.es);
-        if (this.fs) |fs| allocator.free(fs);
+// A Mesh object consisting of triangles with vertices embedded in 2D
+// Edges are implied by Triangles, i.e. they can't exist by themselves.
+// ArrayList(Pt) is necessary because:
+//  - can shift point positions while maintaining mesh
+//  - multiple points potentially at same position (temporarily)
+//  - test idx for equality instead of float values
+//  - save mem in Tri{} objects as one point could be in 
+//  - BUT this makes removal harder... to remove a point we must either
+//     - remove from self.vs and shift so self.vs is compact
+//     - replace in self.vs with null or some other special value
+//     - ignore it in self.vs. a point is effectively removed if no Tri or Edge point to it.
+// Q: removing a point should remove associated edges and triangles ?
+// Q: removing a triangle doesn't automatically remove points, because triangles share points.
+
+// All of the relationships are many-many. point → [2,n] edges, edge → 2 pts, point → [1,n] tris, tri → 3 pts, edge → [1,2] tris (in 2d), tri → 3 edges.
+// This makes it tricky to define ownership rules.
+
+// For Bower-Watson Alg we only need triangles. We want to be able to traverse triangles quickly, and add and remove them.
+
+pub const Mesh2D = struct {
+
+    const Self = @This();
+
+    const Pt = Vec2;
+    const PtIdx = u32;
+    const Edge = [2]PtIdx;
+    const Tri  = [3]PtIdx;
+    const TriIdx = u32;
+
+    // const Tri = struct {
+    //     tri:[3]PtIdx,
+    //     // idx:TriIdx,
+    //     neibs:[3]?TriIdx,
+    // };
+
+    vs: std.ArrayList(Pt),
+    // es: std.ArrayList(Edge),
+    // ts: std.ArrayList(?Tri),
+    ts: std.AutoHashMap(Tri, void),
+
+    // edgeset: std.AutoHashMap(Edge, void),
+    edge2tri: std.AutoHashMap(Edge, [2]?Tri), // can also keep track of edge existence
+
+    al: Allocator,
+
+
+    // pub const Iterator = struct {
+    //     hm: *const Self,
+    //     index: u32 = 0,
+
+    //     pub fn next(it: *Iterator) ?*Tri {
+    //         assert(it.index <= it.hm.capacity());
+    //         if (it.hm.size == 0) return null;
+
+    //         const cap = it.hm.capacity();
+    //         const end = it.hm.metadata.? + cap;
+    //         var metadata = it.hm.metadata.? + it.index;
+
+    //         while (metadata != end) : ({
+    //             metadata += 1;
+    //             it.index += 1;
+    //         }) {
+    //             if (metadata[0].isUsed()) {
+    //                 const key = &it.hm.keys()[it.index];
+    //                 const value = &it.hm.values()[it.index];
+    //                 it.index += 1;
+    //                 return Entry{ .key_ptr = key, .value_ptr = value };
+    //             }
+    //         }
+
+    //         return null;
+    //     }
+    // };
+
+    // tri_neibs: [][3]?TriIdx,
+    // pt_neibs : [][14]?PtIdx,
+
+    pub fn deinit(self: *Self) void {
+        self.vs.deinit();
+        // self.es.deinit();
+        self.ts.deinit();
+        self.edge2tri.deinit();
     }
+
+    pub fn initRand(a:Allocator) !Self {
+
+        var s = Self{
+                    .al = a ,
+                    .vs = try std.ArrayList(Pt).initCapacity(a, 100)   ,
+                    // .es = try std.ArrayList(Edge).initCapacity(a, 100) ,
+                    // .ts = try std.ArrayList(?Tri).initCapacity(a, 100)  ,
+                    .ts = std.AutoHashMap(Tri, void).init(a),
+                    .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a) ,
+                };
+
+        // update pts
+        {var i:u8=0; while (i<4):(i+=1) {
+            const fi = @intToFloat(f32, i);
+            const x = 6*@mod(fi,2.0) + random.float(f32);
+            const y = 6*@floor(fi/2.0) + random.float(f32);
+            s.vs.appendAssumeCapacity(.{x,y});
+        }}
+
+        // update edges
+        // s.es.appendAssumeCapacity(.{0,1});
+        // s.es.appendAssumeCapacity(.{0,2});
+        // s.es.appendAssumeCapacity(.{1,2});
+        // s.es.appendAssumeCapacity(.{1,3});
+        // s.es.appendAssumeCapacity(.{2,3});
+
+        // update tri's
+        try s.ts.put(Tri{0,1,2} , {});
+        try s.ts.put(Tri{1,2,3} , {});
+
+        // update edge→tri map
+
+        // try s.addTrisToEdgeMap(s.ts.items);
+
+        try s.addTrisToEdgeMap(try s.validTris(a));
+
+        return s;
+    }
+
+
+    pub fn validTris(self:Self , a:Allocator) ![]Tri {
+        const tris = blk: {
+            var tri_no_null = try a.alloc(Mesh2D.Tri, self.vs.items.len);
+            var tail:u8=0;
+            var it = self.ts.keyIterator();
+            while (it.next()) |tri| {
+                tri_no_null[tail] = tri.*; 
+                tail+=1;
+            }
+            break :blk a.resize(tri_no_null, tail).?;
+        };
+        return tris;
+    }
+
+
+    // add point return it's index in arraylist
+    pub fn addPt(self:*Self , pt:Pt) !PtIdx {
+        try self.vs.append(pt);
+        return @intCast(PtIdx, self.vs.items.len - 1 );
+    }
+
+    // add triangles whose points are already there
+    pub fn addTris(self:*Self , tris:[]Tri) !void {
+        for (tris) |tri| {
+            const tri_canonical = sortTri(tri);
+            assert(tri_canonical[2] < self.vs.items.len); // make sure tri is valid
+            try self.ts.put(tri,{});
+        }
+        try self.addTrisToEdgeMap(tris);
+    }
+
+    // remove triangles. remove edges iff no triangle exists.
+    pub fn removeTris(self:*Self , tris:[]Tri) !void {
+        try self.removeTrisFromEdgeMap(tris);
+        // TODO: what good is self.ts if we don't remove bad triangles ?
+        for (tris) |tri| {
+            _ = self.ts.remove(tri);
+            // tri.* = null;
+        }
+        // TODO: also, what good are self.es ?
+    }
+
+
+    pub fn addTrisToEdgeMap(self:*Self, tris:[]Tri) !void {
+        for (tris) |tri| {
+            const tri_canonical = sortTri(tri);
+            const a = tri_canonical[0];
+            const b = tri_canonical[1];
+            const c = tri_canonical[2];
+            try self.mapEdgeToTri(.{a,b}, tri_canonical);
+            try self.mapEdgeToTri(.{b,c}, tri_canonical);
+            try self.mapEdgeToTri(.{a,c}, tri_canonical);
+        }
+    }
+
+    pub fn removeTrisFromEdgeMap(self:*Self, tris:[]Tri) !void {
+        for (tris) |tri| {
+            const tri_canonical = sortTri(tri);
+            const a = tri_canonical[0];
+            const b = tri_canonical[1];
+            const c = tri_canonical[2];
+            try self.remTriFromEdge(.{a,b}, tri_canonical);
+            try self.remTriFromEdge(.{b,c}, tri_canonical);
+            try self.remTriFromEdge(.{a,c}, tri_canonical);
+        }
+    }
+
+
+    const eql = std.mem.eql;
+
+    pub fn mapEdgeToTri(self:*Self, _e:Edge, tri:Tri) !void {
+        const e = sortEdge(_e);
+        var _entry = self.edge2tri.getPtr(e);
+        if (_entry==null) {try self.edge2tri.put(e, .{tri,null}); return;}
+        var entry = _entry.?;
+
+        if (entry[0]==null) return error.InconsistentEdgeState;
+
+        // at least one entry must be non-null
+        if (eql(u32, &entry[0].? , &tri)) return; // already exists
+        if (entry[1]==null) {entry[1] = tri; return;} // add it
+        if (eql(u32, &entry[1].? , &tri)) return; // already exists
+
+        // map was already full. we're trying to add a tri without deleting existing ones first.
+        return error.EdgeMapFull;
+    }
+
+    // we know e maps to tri already. if it's not there, throw err.
+    pub fn remTriFromEdge(self:*Self, _e:Edge, tri:Tri) !void {
+        const e = sortEdge(_e);
+        var _entry = self.edge2tri.getPtr(e);
+        if (_entry==null) return error.EdgeDoesntExist; // must already exist.
+
+        var entry = _entry.?;
+
+        // first entry can never be null
+        // if (entry[0]==null) return error.InconsistentEdgeState;
+
+        // error if null
+        const v0 = entry[0].?; 
+        // not null, so try matching to tri
+        const b0 = eql(u32,&v0,&tri);
+        // assign value to v1 if not null, otherwise test b0 and either succeed or err.
+        const v1 = if (entry[1]) |ent1| ent1 else {
+            // v1 is null. if tri==v0 then remove it and return.
+            if (b0) {_ = self.edge2tri.remove(e); return;}
+            // otherwise failure. v0!=tri and v1==null... inconsistent edge state.
+            else {return error.InconsistentEdgeState;}
+        };
+
+        // v1 is not null. so test it vs tri
+        const b1 = eql(u32,&v1,&tri);
+        // now analyze all four cases.
+
+        // const BB = [2]bool;
+
+        if ( b0 and  b1) {return error.InconsistentEdgeState;}
+        if ( b0 and !b1) {entry.* = .{v1,null}; return;} // shift left
+        if (!b0 and  b1) {entry.* = .{v0,null}; return;} // remove 2nd position
+        if (!b0 and !b1) {return error.InconsistentEdgeState;}
+    }
+
+    //  ensure it exists
+    //  give it a unique label?
+    //  update map from edge→tri ?
+    // pub fn addTri() {} 
+
+    // add triangles (a,b,c) for each edge (a,b) of polygon connected to centerpoint (c).
+    // should we also remove any existing triangles (a,b,x) ?
+    // 
+    pub fn addPointInPolygon(self:*Self, pt:Pt, polygon:[]PtIdx) !void {
+        for (polygon) |_,i| {
+            const edge = sortEdge( Edge{polygon[i],polygon[(i+1) % polygon.len]} );
+            if (self.edge2tri.get(edge)==null) return error.InvalidPolygon;
+        }
+
+        // ok now we're committed . add pt to vs, then add new edges and remove old edges.
+        // try self.vs.append(pt);
+        const idx = try self.addPt(pt);
+        // const idx = @intCast(u32, self.vs.items.len);
+
+        // make list of triangles to add
+        var tri_list = try self.al.alloc(Tri, polygon.len);
+        defer self.al.free(tri_list);
+        for (polygon) |_,i| {
+            const edge = Edge{polygon[i],polygon[(i+1) % polygon.len]};
+            tri_list[i] = Tri{edge[0],edge[1],idx};
+        }
+
+        // now add them to mesh and update self
+        try self.addTris(tri_list);
+    }
+
+    pub fn sortTri(_tri:Tri) Tri {
+        var tri = _tri;
+        if (tri[0]>tri[1]) swap(u32,&tri[0],&tri[1]);
+        if (tri[1]>tri[2]) swap(u32,&tri[1],&tri[2]);
+        if (tri[0]>tri[1]) swap(u32,&tri[0],&tri[1]);
+        return tri;
+    }
+
+    pub fn sortEdge(edge:Edge) Edge {
+        var e = edge;
+        if (e[0]>e[1]) swap(PtIdx,&e[0],&e[1]);
+        return e;
+    }
+
+    pub fn show(self:Self) void {
+        print("Triangles \n",.{});
+
+        var it_ts = self.ts.keyIterator();
+        while (it_ts.next()) |tri| {
+            print("{d} \n",.{tri.*});
+        }
+
+        print("Edge map \n", .{});
+        var it_es = self.edge2tri.iterator();
+        while (it_es.next()) |kv| {
+            print("{d} → {d} \n",.{kv.key_ptr.* , kv.value_ptr.*});
+        }
+
+    }
+
+    // pub fn walk(self:Self, start:Tri) 
+
+    // pub fn remTri () {}
+
+    // pub fn getTrisFromEdge(e:Edge) [2]?Tri {}
+
+    // pub fn triExistsQ(tri:Tri) bool {}
+
+    // pub fn walkFaces(start:Tri) []Tri {}
+
+    // pub fn walkEdges(start:Edge) ?
+
 };
+
+const Pix = @Vector(2,u31);
+pub fn pt2PixCast(p:Vec2) Pix {
+    return Pix{@floatToInt(u31, p[0]) , @floatToInt(u31, p[1])};
+}
+
+pub fn newBBox(x0:f32,x1:f32,y0:f32,y1:f32) BBox {
+    return BBox{.x=.{.lo=x0,.hi=x1},.y=.{.lo=y0,.hi=y1}};
+}
+
+pub fn affine(_p:Vec2,bb0:BBox,bb1:BBox) Vec2 {
+    var p = _p;
+
+    p -= Vec2{bb0.x.lo,bb0.y.lo};
+    p *= Vec2{(bb1.x.hi-bb1.x.lo)/(bb0.x.hi-bb0.x.lo) , (bb1.y.hi-bb1.y.lo)/(bb0.y.hi-bb0.y.lo)};
+    p += Vec2{bb1.x.lo,bb1.y.lo};
+
+    return p;
+}
+
+pub fn swap(comptime T: type, a:*T , b:*T) void {
+    const temp = a.*;
+    a.* = b.*;
+    b.* = temp;
+}
+
 
 pub const Range = struct { hi: f32, lo: f32 };
 pub const BBox = struct { x: Range, y: Range };
