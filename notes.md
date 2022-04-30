@@ -53,7 +53,23 @@
 
 I could do everything my self in my own little rendered and try to get everything pixel perfect. Or I could try to use an SVG library. Or TinyVG.
 
+## equality testing
 
+to know if two slices of Tri's contain the same set of Tris we can
+1. put each tri into hashmap-a and hashmap-b
+2. compute hash of hashmap-a and hashmap-b, they should be the same if the sets are the same.
+
+We want a fast, collision-free hash of the 3 u32's in a Tri which is invariant to order / vertex permutation.
+Then we want _another_ hash of this hashmap, (but one that recognizes keys as distinct).
+
+Do we want the Tri objects to always be in a canonical form ? (i.e. sorted low-to-high) to make comparison easy?
+We could do this by sorting at Tri-creation-time.
+Or would we rather enforce canonical form only when inserting into a hashmap?
+Can we sub-class AutoHashMap and override the `put` and `get` methods ?
+
+## logging and debugging
+
+each module should have separate log destination ? and an extra that's unified?
 
 
 

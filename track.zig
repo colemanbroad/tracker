@@ -117,7 +117,7 @@ pub fn minmaxPts(arr: []Pts) [4]f32 {
     return .{ min_x, min_y, max_x, max_y };
 }
 
-fn askUser() !i64 {
+fn waitForUserInput() !i64 {
     if (@import("builtin").is_test) return 0;
 
     const stdin = std.io.getStdIn().reader();
@@ -360,7 +360,7 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
         }
 
         try im.saveRGBA(pic, test_home ++ "strain-test-2.tga");
-        const userval = try askUser();
+        const userval = try waitForUserInput();
         if (userval == 0) break;
     }
 

@@ -180,7 +180,7 @@ pub fn saveU8AsTGA(data: []u8, h: u16, w: u16, name: []const u8) !void {
     // print("dirname : {s} \n" , .{dirname});
     // print("basename : {s} \n" , .{basename});
 
-    try cwd.makePath(dirname.?);
+    cwd.makePath(dirname.?) catch {};
     // cwd.createFile(sub_path: []const u8, flags: File.CreateFlags)
 
     // try std.fs.makeDirAbsolute(dirname.?);
@@ -188,9 +188,9 @@ pub fn saveU8AsTGA(data: []u8, h: u16, w: u16, name: []const u8) !void {
     // try dirnameDir.makePath("");
 
     // WARNING fails when `resolved` is an existing directory...
-    std.fs.deleteDirAbsolute(resolved) catch {};
+    // std.fs.deleteDirAbsolute(resolved) catch {};
     std.fs.deleteFileAbsolute(resolved) catch {};
-    var out = try std.fs.createFileAbsolute(resolved, .{ .exclusive = true });
+    var out = std.fs.createFileAbsolute(resolved, .{ .exclusive = true }) catch unreachable;
 
     // print("dirname and basename \n {s} \n {s} \n" , .{dirname,basename});
 

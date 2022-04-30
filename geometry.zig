@@ -21,6 +21,17 @@ test {
     std.testing.refAllDecls(@This());
 }
 
+
+pub fn print2(
+    comptime src_info: std.builtin.SourceLocation,
+    comptime fmt: []const u8,
+    args: anytype,
+) void {
+    if (true) return;
+    const s1 = comptime std.fmt.comptimePrint("{s}:{d}:{d} ", .{ src_info.file, src_info.line, src_info.column });
+    std.debug.print(s1[41..] ++ fmt, args);
+}
+
 // mean 0 stddev 1
 pub fn randNormalVec3() Vec3 {
     return Vec3{ random.floatNorm(f32), random.floatNorm(f32), random.floatNorm(f32) };
@@ -122,7 +133,7 @@ const Allocator = std.mem.Allocator;
 //  - can shift point positions while maintaining mesh
 //  - multiple points potentially at same position (temporarily)
 //  - test idx for equality instead of float values
-//  - save mem in Tri{} objects as one point could be in 
+//  - save mem in Tri{} objects as one point could be in
 //  - BUT this makes removal harder... to remove a point we must either
 //     - remove from self.vs and shift so self.vs is compact
 //     - replace in self.vs with null or some other special value
@@ -136,13 +147,12 @@ const Allocator = std.mem.Allocator;
 // For Bower-Watson Alg we only need triangles. We want to be able to traverse triangles quickly, and add and remove them.
 
 pub const Mesh2D = struct {
-
     const Self = @This();
 
     const Pt = Vec2;
     const PtIdx = u32;
     const Edge = [2]PtIdx;
-    const Tri  = [3]PtIdx;
+    const Tri = [3]PtIdx;
     const TriIdx = u32;
 
     // const Tri = struct {
@@ -160,7 +170,6 @@ pub const Mesh2D = struct {
     edge2tri: std.AutoHashMap(Edge, [2]?Tri), // can also keep track of edge existence
 
     al: Allocator,
-
 
     // pub const Iterator = struct {
     //     hm: *const Self,
@@ -200,36 +209,41 @@ pub const Mesh2D = struct {
         self.edge2tri.deinit();
     }
 
-    pub fn init(a:Allocator) !Self {
+    pub fn init(a: Allocator, pts: []const Pt) !Self {
         var s = Self{
-                .al = a ,
-                .vs = try std.ArrayList(Pt).initCapacity(a, 100)   ,
-                .ts = std.AutoHashMap(Tri, void).init(a),
-                .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a) ,
-            };
+            .al = a,
+            .vs = try std.ArrayList(Pt).initCapacity(a, 100),
+            .ts = std.AutoHashMap(Tri, void).init(a),
+            .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a),
+        };
+
+        // for (pts) |p| try s.vs.appendSlice
+        try s.vs.appendSlice(pts);
         return s;
     }
 
-    pub fn initRand(a:Allocator) !Self {
-
+    pub fn initRand(a: Allocator) !Self {
         var s = Self{
-                    .al = a ,
-                    .vs = try std.ArrayList(Pt).initCapacity(a, 100)   ,
-                    .ts = std.AutoHashMap(Tri, void).init(a),
-                    .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a) ,
-                };
+            .al = a,
+            .vs = try std.ArrayList(Pt).initCapacity(a, 100),
+            .ts = std.AutoHashMap(Tri, void).init(a),
+            .edge2tri = std.AutoHashMap(Edge, [2]?Tri).init(a),
+        };
 
         // update pts
-        {var i:u8=0; while (i<4):(i+=1) {
-            const fi = @intToFloat(f32, i);
-            const x = 6*@mod(fi,2.0) + random.float(f32);
-            const y = 6*@floor(fi/2.0) + random.float(f32);
-            s.vs.appendAssumeCapacity(.{x,y});
-        }}
+        {
+            var i: u8 = 0;
+            while (i < 4) : (i += 1) {
+                const fi = @intToFloat(f32, i);
+                const x = 6 * @mod(fi, 2.0) + random.float(f32);
+                const y = 6 * @floor(fi / 2.0) + random.float(f32);
+                s.vs.appendAssumeCapacity(.{ x, y });
+            }
+        }
 
         // update tri's
-        try s.ts.put(Tri{0,1,2} , {});
-        try s.ts.put(Tri{1,2,3} , {});
+        try s.ts.put(Tri{ 0, 1, 2 }, {});
+        try s.ts.put(Tri{ 1, 2, 3 }, {});
 
         // update edge→tri map
         try s.addTrisToEdgeMap(try s.validTris(a));
@@ -237,99 +251,119 @@ pub const Mesh2D = struct {
         return s;
     }
 
-
-    pub fn validTris(self:Self , a:Allocator) ![]Tri {
+    pub fn validTris(self: Self, a: Allocator) ![]Tri {
         const tris = blk: {
-            var tri_no_null = try a.alloc(Mesh2D.Tri, self.vs.items.len);
-            var tail:u8=0;
+            var tri_no_null = try a.alloc(Mesh2D.Tri, self.ts.count());
+            var tail: u16 = 0;
             var it = self.ts.keyIterator();
             while (it.next()) |tri| {
-                tri_no_null[tail] = tri.*; 
-                tail+=1;
+                tri_no_null[tail] = tri.*;
+                tail += 1;
             }
             break :blk a.resize(tri_no_null, tail).?;
         };
         return tris;
     }
 
-
     // add point return it's index in arraylist
-    pub fn addPt(self:*Self , pt:Pt) !PtIdx {
+    pub fn addPt(self: *Self, pt: Pt) !PtIdx {
         try self.vs.append(pt);
-        return @intCast(PtIdx, self.vs.items.len - 1 );
+        return @intCast(PtIdx, self.vs.items.len - 1);
     }
 
     // add triangles whose points are already there
-    pub fn addTris(self:*Self , tris:[]Tri) !void {
+    pub fn addTris(self: *Self, tris: []Tri) !void {
         for (tris) |tri| {
             const tri_canonical = sortTri(tri);
             assert(tri_canonical[2] < self.vs.items.len); // make sure tri is valid
-            try self.ts.put(tri,{});
+            try self.ts.put(tri, {});
         }
         try self.addTrisToEdgeMap(tris);
     }
 
+    // pub fn addTriPts(self:*Self , tri:Tri , pts:[3]Pt) !void {
+    //     self.addPt(pts[0]);
+    //     self.addPt(pts[1]);
+    //     self.addPt(pts[2]);
+    //     // self.addTris(&[_]Tri{tri});
+    //     self.addTris(&tri);
+    // }
+
     // remove triangles. remove edges iff no triangle exists.
-    pub fn removeTris(self:*Self , tris:[]Tri) !void {
+    pub fn removeTris(self: *Self, tris: []Tri) !void {
         try self.removeTrisFromEdgeMap(tris);
         // TODO: what good is self.ts if we don't remove bad triangles ?
         for (tris) |tri| {
-            _ = self.ts.remove(tri);
+            const tri_canonical = sortTri(tri);
+            _ = self.ts.remove(tri_canonical);
             // tri.* = null;
         }
         // TODO: also, what good are self.es ?
     }
 
-
-    pub fn addTrisToEdgeMap(self:*Self, tris:[]Tri) !void {
+    pub fn addTrisToEdgeMap(self: *Self, tris: []Tri) !void {
         for (tris) |tri| {
             const tri_canonical = sortTri(tri);
             const a = tri_canonical[0];
             const b = tri_canonical[1];
             const c = tri_canonical[2];
-            try self.mapEdgeToTri(.{a,b}, tri_canonical);
-            try self.mapEdgeToTri(.{b,c}, tri_canonical);
-            try self.mapEdgeToTri(.{a,c}, tri_canonical);
+            // must refer to edge verts in sorted order!
+            try self.mapEdgeToTri(.{ a, b }, tri_canonical);
+            try self.mapEdgeToTri(.{ b, c }, tri_canonical);
+            try self.mapEdgeToTri(.{ a, c }, tri_canonical);
         }
     }
 
-    pub fn removeTrisFromEdgeMap(self:*Self, tris:[]Tri) !void {
+    pub fn removeTrisFromEdgeMap(self: *Self, tris: []Tri) !void {
         for (tris) |tri| {
             const tri_canonical = sortTri(tri);
             const a = tri_canonical[0];
             const b = tri_canonical[1];
             const c = tri_canonical[2];
-            try self.remTriFromEdge(.{a,b}, tri_canonical);
-            try self.remTriFromEdge(.{b,c}, tri_canonical);
-            try self.remTriFromEdge(.{a,c}, tri_canonical);
+            try self.remTriFromEdgeMap(.{ a, b }, tri_canonical);
+            try self.remTriFromEdgeMap(.{ b, c }, tri_canonical);
+            try self.remTriFromEdgeMap(.{ a, c }, tri_canonical);
         }
     }
-
 
     const eql = std.mem.eql;
 
-    pub fn mapEdgeToTri(self:*Self, _e:Edge, tri:Tri) !void {
+    pub fn mapEdgeToTri(self: *Self, _e: Edge, _tri: Tri) !void {
         const e = sortEdge(_e);
+        const tri = sortTri(_tri);
+
         var _entry = self.edge2tri.getPtr(e);
-        if (_entry==null) {try self.edge2tri.put(e, .{tri,null}); return;}
+        if (_entry == null) {
+            try self.edge2tri.put(e, .{ tri, null });
+            return;
+        }
         var entry = _entry.?;
 
-        if (entry[0]==null) return error.InconsistentEdgeState;
+        if (entry[0] == null) return error.InconsistentEdgeState;
 
         // at least one entry must be non-null
-        if (eql(u32, &entry[0].? , &tri)) return; // already exists
-        if (entry[1]==null) {entry[1] = tri; return;} // add it
-        if (eql(u32, &entry[1].? , &tri)) return; // already exists
+        if (eql(u32, &entry[0].?, &tri)) return; // already exists
+        if (entry[1] == null) {
+            entry[1] = tri;
+            return;
+        } // add it
+        if (eql(u32, &entry[1].?, &tri)) return; // already exists
 
         // map was already full. we're trying to add a tri without deleting existing ones first.
         return error.EdgeMapFull;
     }
 
     // we know e maps to tri already. if it's not there, throw err.
-    pub fn remTriFromEdge(self:*Self, _e:Edge, tri:Tri) !void {
+    pub fn remTriFromEdgeMap(self: *Self, _e: Edge, _tri: Tri) !void {
         const e = sortEdge(_e);
+        const tri = sortTri(_tri);
         var _entry = self.edge2tri.getPtr(e);
-        if (_entry==null) return error.EdgeDoesntExist; // must already exist.
+        if (_entry == null) {
+            // const t2 = self.edge2tri.getPtr(.{e[1],e[0]});
+            // print2(@src(),"t2 ? = {any}\n",.{t2.?.*});
+            print2(@src(),"edge = {any}\n",.{e});
+            return error.EdgeDoesntExist; // must already exist.
+        }
 
         var entry = _entry.?;
 
@@ -337,111 +371,139 @@ pub const Mesh2D = struct {
         // if (entry[0]==null) return error.InconsistentEdgeState;
 
         // error if null
-        const v0 = entry[0].?; 
+        const tri0 = entry[0].?;
         // not null, so try matching to tri
-        const b0 = eql(u32,&v0,&tri);
-        // assign value to v1 if not null, otherwise test b0 and either succeed or err.
-        const v1 = if (entry[1]) |ent1| ent1 else {
-            // v1 is null. if tri==v0 then remove it and return.
-            if (b0) {_ = self.edge2tri.remove(e); return;}
-            // otherwise failure. v0!=tri and v1==null... inconsistent edge state.
-            else {return error.InconsistentEdgeState;}
+        const b0 = eql(u32, &tri0, &tri);
+        // assign value to tri1 if not null, otherwise test b0 and either succeed or err.
+        const tri1 = if (entry[1]) |ent1| ent1 else {
+            // tri1 is null. if tri==tri0 then remove it and return.
+            if (b0) {
+                _ = self.edge2tri.remove(e);
+                return;
+            }
+            // otherwise failure. tri0!=tri and tri1==null... inconsistent edge state.
+            // the tri we want to remove isn't here !
+            else {
+                // print2(@src(),"edge {d} , tri {d} , entry {any} \n",.{_e,tri,entry.*});
+                return error.InconsistentEdgeState;
+            }
         };
 
-        // v1 is not null. so test it vs tri
-        const b1 = eql(u32,&v1,&tri);
+        // tri1 is not null. so test it vs tri
+        const b1 = eql(u32, &tri1, &tri);
         // now analyze all four cases.
 
         // const BB = [2]bool;
 
-        if ( b0 and  b1) {return error.InconsistentEdgeState;}
-        if ( b0 and !b1) {entry.* = .{v1,null}; return;} // shift left
-        if (!b0 and  b1) {entry.* = .{v0,null}; return;} // remove 2nd position
-        if (!b0 and !b1) {return error.InconsistentEdgeState;}
+        if (b0 and b1) {
+            return error.InconsistentEdgeState;
+        }
+        if (b0 and !b1) {
+            entry.* = .{ tri1, null };
+            return;
+        } // shift left
+        if (!b0 and b1) {
+            entry.* = .{ tri0, null };
+            return;
+        } // remove 2nd position
+        print2(@src(),"edge {d} tri 0 1 {d} , {d} , {d} , {d} \n",.{_e, e, tri,tri0,tri1},);
+        self.show();
+        if (!b0 and !b1) {
+            return error.InconsistentEdgeState;
+        }
     }
 
     //  ensure it exists
     //  give it a unique label?
     //  update map from edge→tri ?
-    // pub fn addTri() {} 
+    // pub fn addTri() {}
 
     // add triangles (a,b,c) for each edge (a,b) of polygon connected to centerpoint (c).
     // should we also remove any existing triangles (a,b,x) ?
-    // 
-    pub fn addPointInPolygon(self:*Self, pt:Pt, polygon:[]PtIdx) !void {
-        for (polygon) |_,i| {
-            const edge = sortEdge( Edge{polygon[i],polygon[(i+1) % polygon.len]} );
-            if (self.edge2tri.get(edge)==null) return error.InvalidPolygon;
-        }
+    //
+    pub fn addPointInPolygon(self: *Self, pt_idx: PtIdx, polygon: []PtIdx) !void {
+
+        // for (polygon) |_,i| {
+        //     const edge = sortEdge( Edge{polygon[i],polygon[(i+1) % polygon.len]} );
+        //     if (self.edge2tri.get(edge)==null) {
+        //         print2(@src(),"fail with {d} → null\n",.{edge});
+        //         const revedge = Edge{edge[1],edge[0]};
+        //         const val = self.edge2tri.get(revedge);
+        //         print2(@src(),"but rev(edge) = {d} → {d} \n", .{revedge,val});
+        //         return error.InvalidPolygon;
+        //     }
+        // }
 
         // ok now we're committed . add pt to vs, then add new edges and remove old edges.
         // try self.vs.append(pt);
-        const idx = try self.addPt(pt);
+        // const idx = try self.addPt(pt);
         // const idx = @intCast(u32, self.vs.items.len);
 
         // make list of triangles to add
         var tri_list = try self.al.alloc(Tri, polygon.len);
         defer self.al.free(tri_list);
-        for (polygon) |_,i| {
-            const edge = Edge{polygon[i],polygon[(i+1) % polygon.len]};
-            tri_list[i] = Tri{edge[0],edge[1],idx};
+        for (polygon) |_, i| {
+            const edge = Edge{ polygon[i], polygon[(i + 1) % polygon.len] };
+            tri_list[i] = sortTri(Tri{ edge[0], edge[1], pt_idx });
         }
 
         // now add them to mesh and update self
         try self.addTris(tri_list);
+
+        print2(@src(),"Show for pt_idx {d} poly {d} \n", .{ pt_idx, polygon });
+        self.show();
     }
 
-    pub fn sortTri(_tri:Tri) Tri {
+    pub fn sortTri(_tri: Tri) Tri {
         var tri = _tri;
-        if (tri[0]>tri[1]) swap(u32,&tri[0],&tri[1]);
-        if (tri[1]>tri[2]) swap(u32,&tri[1],&tri[2]);
-        if (tri[0]>tri[1]) swap(u32,&tri[0],&tri[1]);
+        if (tri[0] > tri[1]) swap(u32, &tri[0], &tri[1]);
+        if (tri[1] > tri[2]) swap(u32, &tri[1], &tri[2]);
+        if (tri[0] > tri[1]) swap(u32, &tri[0], &tri[1]);
         return tri;
     }
 
-    pub fn sortEdge(edge:Edge) Edge {
+    pub fn sortEdge(edge: Edge) Edge {
         var e = edge;
-        if (e[0]>e[1]) swap(PtIdx,&e[0],&e[1]);
+        if (e[0] > e[1]) swap(PtIdx, &e[0], &e[1]);
         return e;
     }
 
-    pub fn show(self:Self) void {
-        print("Triangles \n",.{});
+    pub fn show(self: Self) void {
+        print2(@src(),"Triangles \n", .{});
 
         var it_ts = self.ts.keyIterator();
         while (it_ts.next()) |tri| {
-            print("{d} \n",.{tri.*});
+            print2(@src(),"{d} \n", .{tri.*});
         }
 
-        print("Edge map \n", .{});
+        print2(@src(),"Edge map \n", .{});
         var it_es = self.edge2tri.iterator();
         while (it_es.next()) |kv| {
-            print("{d} → {d} \n",.{kv.key_ptr.* , kv.value_ptr.*});
+            print2(@src(),"{d} → {d} \n", .{ kv.key_ptr.*, kv.value_ptr.* });
         }
     }
 
     // up to 3 neibs ? any of them can be null;
-    pub fn getTriNeibs(self:Self, tri:Tri) [3]?Tri {
-
+    pub fn getTriNeibs(self: Self, tri: Tri) [3]?Tri {
         const tri_canonical = sortTri(tri);
         const a = tri_canonical[0];
         const b = tri_canonical[1];
         const c = tri_canonical[2];
-        var res:[3]?Tri = undefined;
-        res[0] = self.getSingleNeib(.{a,b});
-        res[1] = self.getSingleNeib(.{b,c});
-        res[2] = self.getSingleNeib(.{a,c});
+        var res: [3]?Tri = undefined;
+        res[0] = self.getSingleNeib(tri_canonical, .{ a, b });
+        res[1] = self.getSingleNeib(tri_canonical, .{ b, c });
+        res[2] = self.getSingleNeib(tri_canonical, .{ a, c });
         return res;
     }
 
-    pub fn getSingleNeib(self:Self, tri:Tri, edge:Edge) ?Tri {
+    pub fn getSingleNeib(self: Self, tri: Tri, edge: Edge) ?Tri {
         const m2tris = self.edge2tri.get(edge);
-        if (eql(u32,&tri,&m2tris[0].?)) return m2tris[1];
-        return m2tris[0];
+        if (m2tris == null) return null;
+        if (eql(u32, &tri, &m2tris.?[0].?)) return m2tris.?[1];
+        return m2tris.?[0];
     }
-    
 
-    // pub fn walk(self:Self, start:Tri) 
+    // pub fn walk(self:Self, start:Tri)
 
     // pub fn remTri () {}
 
@@ -455,31 +517,30 @@ pub const Mesh2D = struct {
 
 };
 
-const Pix = @Vector(2,u31);
-pub fn pt2PixCast(p:Vec2) Pix {
-    return Pix{@floatToInt(u31, p[0]) , @floatToInt(u31, p[1])};
+const Pix = @Vector(2, u31);
+pub fn pt2PixCast(p: Vec2) Pix {
+    return Pix{ @floatToInt(u31, p[0]), @floatToInt(u31, p[1]) };
 }
 
-pub fn newBBox(x0:f32,x1:f32,y0:f32,y1:f32) BBox {
-    return BBox{.x=.{.lo=x0,.hi=x1},.y=.{.lo=y0,.hi=y1}};
+pub fn newBBox(x0: f32, x1: f32, y0: f32, y1: f32) BBox {
+    return BBox{ .x = .{ .lo = x0, .hi = x1 }, .y = .{ .lo = y0, .hi = y1 } };
 }
 
-pub fn affine(_p:Vec2,bb0:BBox,bb1:BBox) Vec2 {
+pub fn affine(_p: Vec2, bb0: BBox, bb1: BBox) Vec2 {
     var p = _p;
 
-    p -= Vec2{bb0.x.lo,bb0.y.lo};
-    p *= Vec2{(bb1.x.hi-bb1.x.lo)/(bb0.x.hi-bb0.x.lo) , (bb1.y.hi-bb1.y.lo)/(bb0.y.hi-bb0.y.lo)};
-    p += Vec2{bb1.x.lo,bb1.y.lo};
+    p -= Vec2{ bb0.x.lo, bb0.y.lo };
+    p *= Vec2{ (bb1.x.hi - bb1.x.lo) / (bb0.x.hi - bb0.x.lo), (bb1.y.hi - bb1.y.lo) / (bb0.y.hi - bb0.y.lo) };
+    p += Vec2{ bb1.x.lo, bb1.y.lo };
 
     return p;
 }
 
-pub fn swap(comptime T: type, a:*T , b:*T) void {
+pub fn swap(comptime T: type, a: *T, b: *T) void {
     const temp = a.*;
     a.* = b.*;
     b.* = temp;
 }
-
 
 pub const Range = struct { hi: f32, lo: f32 };
 pub const BBox = struct { x: Range, y: Range };
@@ -931,7 +992,7 @@ test "geometry. mesh. VertexNeibArray on BoxPoly" {
     const surf = Mesh{ .vs = box.vs[0..], .es = box.es[0..], .fs = box.fs[0..] };
     const nl = try VertexNeibArray(3).init(surf.es, surf.vs.len);
     defer nl.deinit();
-    print("\n{d}\n", .{nl});
+    print2(@src(),"\n{d}\n", .{nl});
 }
 
 // index -> [n]index map. Maps edges to their faces and faces to their edges.
@@ -979,7 +1040,7 @@ test "geometry. mesh. Face2Edge on BoxPoly" {
     const surf = Mesh{ .vs = box.vs[0..], .es = box.es[0..], .fs = box.fs[0..] };
     const e2f = try Face2Edge(4).init(surf.es, surf.fs.?);
     defer e2f.deinit();
-    print("\n{d}\n", .{e2f});
+    print2(@src(),"\n{d}\n", .{e2f});
 }
 
 // memory layout: start at top left. first go down columns, then right across rows.
@@ -1017,7 +1078,7 @@ pub fn matFromVecs(v0: [3]f32, v1: [3]f32, v2: [3]f32) Mat3x3 {
 test "geometry. matrix inverse" {
     // const mA = [9]f32{1,2,0,0,1,0,0,0,1}; // checked against julia
     const mA = [9]f32{ 1, 2, -9, 4, 1, -2, 3, 3, 0 }; // checked against julia
-    print("\n\n{d}\n\n", .{invert3x3(mA)});
+    print2(@src(),"\n\n{d}\n\n", .{invert3x3(mA)});
 }
 
 // Find the intersection points between a line and an axis-aligned bounding box.
@@ -1057,13 +1118,13 @@ pub fn intersectRayAABB(ray: Ray, box: Ray) struct { pt0: ?Vec3, pt1: ?Vec3 } {
     const ipYFarTest = p0[0] <= ipYFar[0] and ipYFar[0] < p1[0] and p0[2] <= ipYFar[2] and ipYFar[2] < p1[2];
     const ipXFarTest = p0[0] <= ipXFar[0] and ipXFar[0] < p1[0] and p0[1] <= ipXFar[1] and ipXFar[1] < p1[1];
 
-    // print("Our box test results are:\n\n",.{});
-    // print("pt1= {d} intersection?: {}\n",.{ipZNear, ipZNearTest});
-    // print("pt2= {d} intersection?: {}\n",.{ipYNear, ipYNearTest});
-    // print("pt3= {d} intersection?: {}\n",.{ipXNear, ipXNearTest});
-    // print("pt4= {d} intersection?: {}\n",.{ipZFar, ipZFarTest});
-    // print("pt5= {d} intersection?: {}\n",.{ipYFar, ipYFarTest});
-    // print("pt6= {d} intersection?: {}\n",.{ipXFar, ipXFarTest});
+    // print2(@src(),"Our box test results are:\n\n",.{});
+    // print2(@src(),"pt1= {d} intersection?: {}\n",.{ipZNear, ipZNearTest});
+    // print2(@src(),"pt2= {d} intersection?: {}\n",.{ipYNear, ipYNearTest});
+    // print2(@src(),"pt3= {d} intersection?: {}\n",.{ipXNear, ipXNearTest});
+    // print2(@src(),"pt4= {d} intersection?: {}\n",.{ipZFar, ipZFarTest});
+    // print2(@src(),"pt5= {d} intersection?: {}\n",.{ipYFar, ipYFarTest});
+    // print2(@src(),"pt6= {d} intersection?: {}\n",.{ipXFar, ipXFarTest});
 
     var pIn: ?Vec3 = null;
     var pOut: ?Vec3 = null;
@@ -1101,11 +1162,11 @@ pub fn intersectRayAABB(ray: Ray, box: Ray) struct { pt0: ?Vec3, pt1: ?Vec3 } {
             assert(b >= 0);
 
             if (b <= a) {
-                // print("starting pIn,pOut = {d:0.2} , {d:0.2}\n" , .{pIn,pOut});
+                // print2(@src(),"starting pIn,pOut = {d:0.2} , {d:0.2}\n" , .{pIn,pOut});
                 const temp = pIn;
                 pIn = pOut;
                 pOut = temp;
-                // print("swapped  pIn,pOut = {d:0.2} , {d:0.2}\n" , .{pIn,pOut});
+                // print2(@src(),"swapped  pIn,pOut = {d:0.2} , {d:0.2}\n" , .{pIn,pOut});
             }
         }
     }
@@ -1118,7 +1179,7 @@ pub fn intersectRayAABB(ray: Ray, box: Ray) struct { pt0: ?Vec3, pt1: ?Vec3 } {
 
 test "geometry. Axis aligned bounding box intersection test" {
     // fn testAxisAlignedBoundingBox() !void {
-    print("\n", .{});
+    print2(@src(),"\n", .{});
     {
         // The ray intersects the box at the points {0,0,0} and {1,3,1}
         const ray = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 1, 3, 1 } };
@@ -1126,8 +1187,8 @@ test "geometry. Axis aligned bounding box intersection test" {
         const res = intersectRayAABB(ray, box);
         try expect(abs(res.pt0.? - Vec3{ 0, 0, 0 }) < 1e-6);
         try expect(abs(res.pt1.? - Vec3{ 1, 3, 1 }) < 1e-6);
-        print("{d}\n", .{res});
-        print("\n", .{});
+        print2(@src(),"{d}\n", .{res});
+        print2(@src(),"\n", .{});
     }
 
     {
@@ -1135,9 +1196,9 @@ test "geometry. Axis aligned bounding box intersection test" {
         const ray = Ray{ .pt0 = .{ -1, 0, 0 }, .pt1 = .{ -1, 3, 1 } };
         const box = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 3, 3, 3 } };
         const res = intersectRayAABB(ray, box);
-        print("{d}\n", .{res});
+        print2(@src(),"{d}\n", .{res});
         try expect(res.pt0 == null and res.pt1 == null);
-        print("\n", .{});
+        print2(@src(),"\n", .{});
     }
 
     {
@@ -1146,8 +1207,8 @@ test "geometry. Axis aligned bounding box intersection test" {
         const box = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 3, 3, 3 } };
         const res = intersectRayAABB(ray, box);
         try expect((res.pt0 == null) != (res.pt1 == null)); // `!=` can be used as `xor`
-        print("{d}\n", .{res});
-        print("\n", .{});
+        print2(@src(),"{d}\n", .{res});
+        print2(@src(),"\n", .{});
     }
 }
 
@@ -1189,9 +1250,9 @@ pub fn intersectRayFace(ray: Ray, face: Face) struct { b: f32, c: f32, pt: Vec3 
     const intersectionPoint1 = @splat(3, abc[0]) * dr + r0;
     const intersectionPoint2 = @splat(3, abc[1]) * dp1 + @splat(3, abc[2]) * dp2 + p0;
 
-    print("\n\nabc={d}\n\n", .{abc});
-    print("intersection point (v1) = a*dr + r0 = {d} \n", .{intersectionPoint1});
-    print("intersection point (v2) = b*dp1 + c*dp2 + p0 = {d} \n", .{intersectionPoint2});
+    print2(@src(),"\n\nabc={d}\n\n", .{abc});
+    print2(@src(),"intersection point (v1) = a*dr + r0 = {d} \n", .{intersectionPoint1});
+    print2(@src(),"intersection point (v2) = b*dp1 + c*dp2 + p0 = {d} \n", .{intersectionPoint2});
 
     return .{ .b = abc[1], .c = abc[2], .pt = intersectionPoint2 };
 }
@@ -1200,7 +1261,7 @@ test "geometry. Intersect Ray with (arbitrary) Face" {
     const r1 = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 1, 1.5, 1.5 } };
     const f1 = Face{ .pt0 = .{ 5, 0, 0 }, .pt1 = .{ 0, 5, 0 }, .pt2 = .{ 0, 0, 5 } };
     const x0 = intersectRayFace(r1, f1);
-    print("\n{d}\n", .{x0});
+    print2(@src(),"\n{d}\n", .{x0});
 }
 
 // (Where) does a ray intersect with a quadralateral face?
@@ -1282,12 +1343,12 @@ pub fn getCircumcircle2d(tri: [3]Vec2) CircleR2 {
     const centerpoint = Vec2{ sx / m, sy / m } + center;
     const radiusSquared = (n / m + (sx * sx + sy * sy) / (m * m)) * mindist * mindist;
 
-    // print("CircumCircle\n",.{});
-    // print("a={d}\n",.{a});
-    // print("b={d}\n",.{b});
-    // print("c={d}\n",.{c});
-    // print("center={d}\n",.{center});
-    // print("radiusSquared={d}\n\n\n",.{radiusSquared});
+    // print2(@src(),"CircumCircle\n",.{});
+    // print2(@src(),"a={d}\n",.{a});
+    // print2(@src(),"b={d}\n",.{b});
+    // print2(@src(),"c={d}\n",.{c});
+    // print2(@src(),"center={d}\n",.{center});
+    // print2(@src(),"radiusSquared={d}\n\n\n",.{radiusSquared});
 
     return .{ .pt = centerpoint, .r2 = radiusSquared };
 }
@@ -1312,17 +1373,17 @@ pub fn getCircumcircle2dv2(tri: [3]Vec2) CircleR2 {
 
     const circumcenter = x0 + Vec2{ w[0] * dx0[0], w[0] * dx0[1] };
     // const circumcenter2 = x1 + Vec2{w[1]*dx1[0],w[1]*dx1[1]};
-    // print("centers:\n",.{});
-    // print("0:     {d}\n",.{circumcenter});
-    // print("1:     {d}\n",.{circumcenter2});
-    // print("delta: {d}\n",.{circumcenter2 - circumcenter});
+    // print2(@src(),"centers:\n",.{});
+    // print2(@src(),"0:     {d}\n",.{circumcenter});
+    // print2(@src(),"1:     {d}\n",.{circumcenter2});
+    // print2(@src(),"delta: {d}\n",.{circumcenter2 - circumcenter});
 
     // intersections
     // const p_ab = intersection(tri[0]+d01 , tri[0]+d01+rot90_d01 , tri[1]+d12 , tri[1]+d12+rot90_d12);
     const r0 = tri[0] - circumcenter;
     // const r1 = tri[1]-circumcenter;
     // const r2 = tri[2]-circumcenter;
-    // print("Radii: {d} .. {d} .. {d} \n" , .{r0,r1,r2});
+    // print2(@src(),"Radii: {d} .. {d} .. {d} \n" , .{r0,r1,r2});
     const ret = .{ .pt = circumcenter, .r2 = dot2(r0, r0) };
     return ret;
 }
@@ -1349,9 +1410,9 @@ pub fn det(mat: Mat3x3) f32 {
 
 pub fn pointInTriangleCircumcircle2d(pt: Vec2, tri: [3]Vec2) bool {
     const circumcircle = getCircumcircle2dv2(tri);
-    const u = circumcircle.pt;
+    const p_center = circumcircle.pt;
     const r2 = circumcircle.r2;
-    const delta = pt - u;
+    const delta = pt - p_center;
     if (dot2(delta, delta) <= r2) return true else return false;
 }
 
@@ -1368,9 +1429,9 @@ test "geometry. test point in circumcircle" {
     const _d3 = @sqrt(2.0) * 5.0 / 2.0 + 1.0;
     const v3 = Vec2{ _d3, _d3 }; // true
 
-    print("{b}\n", .{pointInTriangleCircumcircle2d(v1, tri)});
-    print("{b}\n", .{pointInTriangleCircumcircle2d(v2, tri)});
-    print("{b}\n", .{pointInTriangleCircumcircle2d(v3, tri)});
+    print2(@src(),"{b}\n", .{pointInTriangleCircumcircle2d(v1, tri)});
+    print2(@src(),"{b}\n", .{pointInTriangleCircumcircle2d(v2, tri)});
+    print2(@src(),"{b}\n", .{pointInTriangleCircumcircle2d(v3, tri)});
 }
 
 test "geometry. fuzz circumcircle" {
@@ -1388,9 +1449,9 @@ test "geometry. fuzz circumcircle" {
         var p1 = cp + r * normalize2(randNormalVec2());
         var p2 = cp + r * normalize2(randNormalVec2());
         var p3 = cp + r * normalize2(randNormalVec2()) * Vec2{ 1.01, 1.01 };
-        print("count {d}  \n", .{count}); // , p0,p1,p2,p3});
+        print2(@src(),"count {d}  \n", .{count}); // , p0,p1,p2,p3});
 
-        errdefer print("{d}\n{d}\n{d}\n{d}\n", .{ p0, p1, p2, p3 });
+        errdefer print2(@src(),"{d}\n{d}\n{d}\n{d}\n", .{ p0, p1, p2, p3 });
         try expect(!pointInTriangleCircumcircle2d(p3, .{ p0, p1, p2 }));
     }
 
@@ -1406,8 +1467,8 @@ test "geometry. fuzz circumcircle" {
         var p1 = cp + r * normalize2(randNormalVec2());
         var p2 = cp + r * normalize2(randNormalVec2());
         var p3 = cp + r * normalize2(randNormalVec2()) * Vec2{ 0.99, 0.99 };
-        print("count {d}  \n", .{count}); // , p0,p1,p2,p3});
-        errdefer print("{d}\n{d}\n{d}\n{d}\n", .{ p0, p1, p2, p3 });
+        print2(@src(),"count {d}  \n", .{count}); // , p0,p1,p2,p3});
+        errdefer print2(@src(),"{d}\n{d}\n{d}\n{d}\n", .{ p0, p1, p2, p3 });
         try expect(pointInTriangleCircumcircle2d(p3, .{ p0, p1, p2 }));
     }
 }
@@ -1422,8 +1483,8 @@ test "geometry. test point in triange" {
     const v1 = Vec2{ 1, 1 }; // true
     const v2 = Vec2{ -1, -1 }; // false
 
-    print("{b}\n", .{pointInTriangle2d(v1, tri)});
-    print("{b}\n", .{pointInTriangle2d(v2, tri)});
+    print2(@src(),"{b}\n", .{pointInTriangle2d(v1, tri)});
+    print2(@src(),"{b}\n", .{pointInTriangle2d(v2, tri)});
 }
 
 pub fn lerpVec2(t: f32, a: Vec2, b: Vec2) Vec2 {
@@ -1465,19 +1526,19 @@ test "geometry. cross()" {
     {
         const a = Vec3{ 1, 0, 0 };
         const b = Vec3{ 0, 1, 0 };
-        print("\n{d:.3}", .{cross(a, b)});
+        print2(@src(),"\n{d:.3}", .{cross(a, b)});
     }
 
     {
         const a = Vec3{ 0, 1, 0 };
         const b = Vec3{ 0, 0, 1 };
-        print("\n{d:.3}", .{cross(a, b)});
+        print2(@src(),"\n{d:.3}", .{cross(a, b)});
     }
 
     {
         const a = Vec3{ 0, 1, 0 };
         const b = Vec3{ 0, 0, 1 };
-        print("\n{d:.3}", .{cross(a, b)});
+        print2(@src(),"\n{d:.3}", .{cross(a, b)});
     }
 }
 
@@ -1535,13 +1596,13 @@ test "geometry. matrix multiplication" {
     const A1 = [9]f32{ 0.943902, 0.775719, 0.931731, 0.0906212, 0.178994, 0.729976, 0.00516308, 0.572436, 0.217663 };
     const A2 = [9]f32{ 0.117929, 0.637452, 0.395997, 0.0014168, 0.442474, 0.450939, 0.970842, 0.382466, 0.57684 };
 
-    print("\n matVecMul : {d} ", .{matVecMul(A1, a)}); // { 0.5011608600616455, 0.7376041412353516, 0.7134442329406738 }
+    print2(@src(),"\n matVecMul : {d} ", .{matVecMul(A1, a)}); // { 0.5011608600616455, 0.7376041412353516, 0.7134442329406738 }
     // From Julia (Float64)
     // 0.5011606467452332
     // 0.7376040111844648
     // 0.7134446669414377
 
-    print("\n matMatMul : {d} ", .{matMatMul(A1, A2)}); // { 0.1711246371269226, 0.4322627782821655, 0.6613966822624207, 0.04376308247447014, 0.3384329378604889, 0.4224681854248047, 0.9540175199508667, 1.151763677597046, 1.3093112707138062 }
+    print2(@src(),"\n matMatMul : {d} ", .{matMatMul(A1, A2)}); // { 0.1711246371269226, 0.4322627782821655, 0.6613966822624207, 0.04376308247447014, 0.3384329378604889, 0.4224681854248047, 0.9540175199508667, 1.151763677597046, 1.3093112707138062 }
 
     // 0.171124  0.0437631  0.954017
     // 0.432262  0.338433   1.15176
@@ -1577,11 +1638,11 @@ test "geometry. rotYawPitchRoll()" {
     var i: u32 = 0;
     while (i < 100) : (i += 1) {
         const rv = normalize(randNormalVec3());
-        print("Len {} .. ", .{abs(rv)});
+        print2(@src(),"Len {} .. ", .{abs(rv)});
         const ypr = randNormalVec3() * Vec3{ 2 * pi, 2 * pi, 2 * pi };
         const rot = rotYawPitchRoll(ypr[0], ypr[1], ypr[2]);
         const rotatedVec = matVecMul(rot, rv);
-        print("Len After {} .. \n", .{abs(rotatedVec)});
+        print2(@src(),"Len After {} .. \n", .{abs(rotatedVec)});
     }
 }
 
@@ -1601,10 +1662,10 @@ pub fn rotateCwithRotorAB(vc: Vec3, va: Vec3, vb: Vec3) Vec3 {
 }
 
 test "geometry. asin()" {
-    print("\n asin(1)={} ", .{std.math.asin(@as(f32, 1.0))}); // 1.57079637 = π/2
-    print("\n asin(-1)={}", .{std.math.asin(@as(f32, -1.0))}); // -1.57079637 = -π/2
-    print("\n asin(0)={} ", .{std.math.asin(@as(f32, 0.0))}); // 0
-    print("\n asin(-0)={}", .{std.math.asin(@as(f32, -0.0))}); // -0
+    print2(@src(),"\n asin(1)={} ", .{std.math.asin(@as(f32, 1.0))}); // 1.57079637 = π/2
+    print2(@src(),"\n asin(-1)={}", .{std.math.asin(@as(f32, -1.0))}); // -1.57079637 = -π/2
+    print2(@src(),"\n asin(0)={} ", .{std.math.asin(@as(f32, 0.0))}); // 0
+    print2(@src(),"\n asin(-0)={}", .{std.math.asin(@as(f32, -0.0))}); // -0
 }
 
 pub fn testRodriguezRotation() !void {
@@ -1616,7 +1677,7 @@ pub fn testRodriguezRotation() !void {
             const v1 = normalize(randNormalVec3()); // start
             const v2 = normalize(randNormalVec3()); // target
             const v3 = rotateCwithRotorAB(v1, v1, v2); // try to rotate start to target
-            print("Len After = {e:.3}\tDelta = {e:.3} \n", .{ abs(v3), abs(v2 - v3) });
+            print2(@src(),"Len After = {e:.3}\tDelta = {e:.3} \n", .{ abs(v3), abs(v2 - v3) });
         }
     }
 
@@ -1632,7 +1693,7 @@ pub fn testRodriguezRotation() !void {
             const v3 = rotateCwithRotorAB(v1, a, b); // try to rotate start to target
             const v4 = rotateCwithRotorAB(v2, a, b); // try to rotate start to target
             const dot2_ = dot(v3, v4);
-            print("len(pre) {d:10.5} len(post) {d:10.5} dot(pre) {d:10.5} dot(post) {d:10.5} delta={e:13.5}\n", .{ abs(v1), abs(v3), dot1_, dot2_, dot2_ - dot1_ });
+            print2(@src(),"len(pre) {d:10.5} len(post) {d:10.5} dot(pre) {d:10.5} dot(post) {d:10.5} delta={e:13.5}\n", .{ abs(v1), abs(v3), dot1_, dot2_, dot2_ - dot1_ });
             try std.testing.expect(dot1_ - dot2_ < 1e-6);
         }
     }
