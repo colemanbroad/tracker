@@ -8,30 +8,30 @@ pub fn build(b: *Builder) void {
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
     // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+    // const target = b.standardTargetOptions(.{});
 
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const mode = b.standardReleaseOptions();
+    // const mode = b.standardReleaseOptions();
 
     // const exe = b.addExecutable("track", "track.zig");
-    const exe = b.addExecutable("imageToys", "imageToys.zig");
-    exe.addIncludePath("tracy/");
+    const exe = b.addExecutable("delaunay", "delaunay.zig");
     exe.addIncludePath(".");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
+    addTracy(b, exe);
+    // exe.setTarget(target);
+    // exe.setBuildMode(mode);
     exe.install();
 
-    const tracy = b.addExecutable("tracy", "tracy/TracyClient.cpp");
-    tracy.addIncludePath("tracy/");
-    tracy.setTarget(target);
-    tracy.setBuildMode(mode);
-    tracy.install();
-
     // const lib = b.addStaticLibrary("track", "track.zig");
-    const lib = b.addSharedLibrary("track", "track.zig", .unversioned);
-    lib.setBuildMode(mode);
-    lib.install();
+    // const lib = b.addSharedLibrary("track", "track.zig", .unversioned);
+    // lib.setBuildMode(mode);
+    // lib.install();
+
+    // const run_cmd = exe.run();
+    // b.step("run","Run the app").dependOn(&exe.step);
+
+    // exe.step
+    // b.default_step().dependOn
 
     // const run_cmd = exe.run();
     // run_cmd.step.dependOn(b.getInstallStep());
@@ -60,4 +60,18 @@ fn linkOpenCL(b: *Builder, exe: *LibExeObjStep) void {
     }
 
     if (exe.kind != .Test) exe.install();
+}
+
+fn addTracy(b: *Builder, exe: *LibExeObjStep) void {
+    const ztracy = @import("ztracy/build.zig");
+    const enable_tracy = b.option(bool, "enable-tracy", "Enable Tracy profiler") orelse true; // EDIT HERE
+    const exe_options = b.addOptions();
+    exe_options.addOption(bool, "enable_tracy", enable_tracy);
+    const options_pkg = exe_options.getPackage("build_options");
+    exe.addPackage(ztracy.getPkg(b, options_pkg));
+    ztracy.link(exe, enable_tracy);
+}
+
+fn thisDir() []const u8 {
+    return std.fs.path.dirname(@src().file) orelse ".";
 }

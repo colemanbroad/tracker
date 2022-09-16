@@ -84,7 +84,6 @@ pub fn traceLineSegment(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Vec2)
 
 pub const Circle = struct { center: Vec2, radius: f32 };
 
-
 /// circle uses continuous pix coords with pixel centers at {i+0.5,j+0.5} for i,j in [0..]
 pub fn traceCircleOutline(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Vec2) void, circle: Circle) void {
     const d_theta: f32 = 1 / circle.radius; // in radians 2pi / (2pi r)
@@ -167,7 +166,7 @@ fn fnSetValImg(ctx: ImgCtx, pt: Pt) void {
 }
 
 test "draw two lines" {
-// pub fn main() !void {
+    // pub fn main() !void {
     var pic = try Img2D([4]u8).init(100, 100);
     defer pic.deinit();
     for (pic.img) |*v| v.* = .{ 0, 0, 0, 255 };

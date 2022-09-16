@@ -60,7 +60,7 @@ pub fn rasterize(self: g.Mesh2D, name: []const u8) !void {
     try im.saveRGBA(pix, name);
 }
 
-const width = 1600;
+const width = 2500;
 
 pub fn rasterizeHighlightTri(self: g.Mesh2D, name: []const u8, tris: [][3]u32) !void {
     var pix = try im.Img2D([4]u8).init(width, width);
@@ -261,117 +261,6 @@ pub fn rasterizeHighlightStuff(self: g.Mesh2D, name: []const u8, pts: []Vec2, ed
 
     try im.saveRGBA(pix, name);
 }
-
-// pub fn rasterizeTriGrid(trigrid:tg.GridHash2 , name: []const u8, pts: []Vec2, edges: [][2]u32, tris: [][3]u32) !void {
-
-//     var pix = try im.Img2D([4]u8).init(width, width);
-//     defer pix.deinit();
-
-//     const bbox = g.boundsBBox(self.vs.items);
-//     const bbox_target = g.newBBox(10, width - 10, 10, width - 10);
-
-//     for (self.vs.items) |p| {
-//         const p2 = g.pt2PixCast(g.affine(p, bbox, bbox_target)); // transformed
-//         draw.drawCircle([4]u8, pix, p2[0], p2[1], 3, .{ 255, 255, 255, 255 });
-//     }
-
-//     var it = self.ts.keyIterator();
-
-//     while (it.next()) |_tri| {
-//         const tri = _tri.*;
-
-//         const p0 = g.pt2PixCast(g.affine(self.vs.items[tri[0]], bbox, bbox_target));
-//         const p1 = g.pt2PixCast(g.affine(self.vs.items[tri[1]], bbox, bbox_target));
-//         const p2 = g.pt2PixCast(g.affine(self.vs.items[tri[2]], bbox, bbox_target));
-
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p0[0],
-//             p0[1],
-//             p1[0],
-//             p1[1],
-//             .{ 255, 0, 0, 255 },
-//         );
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p0[0],
-//             p0[1],
-//             p2[0],
-//             p2[1],
-//             .{ 255, 0, 0, 255 },
-//         );
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p1[0],
-//             p1[1],
-//             p2[0],
-//             p2[1],
-//             .{ 255, 0, 0, 255 },
-//         );
-//     }
-
-//     for (tris) |tri| {
-
-//         const p0 = g.pt2PixCast(g.affine(self.vs.items[tri[0]], bbox, bbox_target));
-//         const p1 = g.pt2PixCast(g.affine(self.vs.items[tri[1]], bbox, bbox_target));
-//         const p2 = g.pt2PixCast(g.affine(self.vs.items[tri[2]], bbox, bbox_target));
-
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p0[0],
-//             p0[1],
-//             p1[0],
-//             p1[1],
-//             .{ 0, 0, 255, 255 },
-//         );
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p0[0],
-//             p0[1],
-//             p2[0],
-//             p2[1],
-//             .{ 0, 0, 255, 255 },
-//         );
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p1[0],
-//             p1[1],
-//             p2[0],
-//             p2[1],
-//             .{ 0, 0, 255, 255 },
-//         );
-//     }
-
-//     for (edges) |edge| {
-
-//         const p0 = g.pt2PixCast(g.affine(self.vs.items[edge[0]], bbox, bbox_target));
-//         const p1 = g.pt2PixCast(g.affine(self.vs.items[edge[1]], bbox, bbox_target));
-//         // const p2 = g.pt2PixCast(g.affine(self.vs.items[tri[2]], bbox, bbox_target));
-
-//         draw.drawLine(
-//             [4]u8,
-//             pix,
-//             p0[0],
-//             p0[1],
-//             p1[0],
-//             p1[1],
-//             .{ 0, 255, 0, 255 },
-//         );
-//     }
-
-//     for (pts) |p| {
-//         const p0 = g.pt2PixCast(g.affine(p, bbox, bbox_target));
-//         draw.drawCircle([4]u8, pix, p0[0], p0[1], 3, .{ 255, 0, 0, 255 });
-//     }
-
-//     try im.saveRGBA(pix, name);    
-// }
 
 pub fn main() !void {
     var a = std.testing.allocator;

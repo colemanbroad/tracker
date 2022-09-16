@@ -246,7 +246,9 @@ pub const Mesh2D = struct {
         try s.ts.put(Tri{ 1, 2, 3 }, {});
 
         // update edge→tri map
-        try s.addTrisToEdgeMap(try s.validTris(a));
+        try s.addTri(Tri{0,1,2});
+        try s.addTri(Tri{1,2,3});
+        // try s.addTrisToEdgeMap(try s.validTris(a));
 
         return s;
     }
@@ -272,13 +274,20 @@ pub const Mesh2D = struct {
     }
 
     // add triangles whose points are already there
-    pub fn addTris(self: *Self, tris: []Tri) !void {
-        for (tris) |tri| {
-            const tri_canonical = sortTri(tri);
-            assert(tri_canonical[2] < self.vs.items.len); // make sure tri is valid
-            try self.ts.put(tri, {});
-        }
-        try self.addTrisToEdgeMap(tris);
+    // pub fn addTris(self: *Self, tris: []Tri) !void {
+    //     for (tris) |tri| {
+    //         const tri_canonical = sortTri(tri);
+    //         assert(tri_canonical[2] < self.vs.items.len); // make sure tri is valid
+    //         try self.ts.put(tri, {});
+    //     }
+    //     try self.addTrisToEdgeMap(tris);
+    // }
+
+    pub fn addTri(self: *Self, tri_unsorted:Tri) !void {
+        const tri = sortTri(tri_unsorted);
+        assert(tri[2] < self.vs.items.len); // make sure tri is valid
+        try self.ts.put(tri, {});
+        try self.addTriToEdgeMap(tri);
     }
 
     // pub fn addTriPts(self:*Self , tri:Tri , pts:[3]Pt) !void {
@@ -290,45 +299,36 @@ pub const Mesh2D = struct {
     // }
 
     // remove triangles. remove edges iff no triangle exists.
-    pub fn removeTris(self: *Self, tris: []Tri) !void {
-        try self.removeTrisFromEdgeMap(tris);
-        // TODO: what good is self.ts if we don't remove bad triangles ?
-        for (tris) |tri| {
-            const tri_canonical = sortTri(tri);
-            _ = self.ts.remove(tri_canonical);
-            // tri.* = null;
-        }
-        // TODO: also, what good are self.es ?
+    pub fn removeTri(self: *Self, tri_unsorted: Tri) void {
+        const tri = sortTri(tri_unsorted);
+        self.removeTriFromEdgeMap(tri);
+        _ = self.ts.remove(tri);
     }
 
-    pub fn addTrisToEdgeMap(self: *Self, tris: []Tri) !void {
-        for (tris) |tri| {
-            const tri_canonical = sortTri(tri);
-            const a = tri_canonical[0];
-            const b = tri_canonical[1];
-            const c = tri_canonical[2];
-            // must refer to edge verts in sorted order!
-            try self.mapEdgeToTri(.{ a, b }, tri_canonical);
-            try self.mapEdgeToTri(.{ b, c }, tri_canonical);
-            try self.mapEdgeToTri(.{ a, c }, tri_canonical);
-        }
+
+    fn addTriToEdgeMap(self: *Self, tri: Tri) !void {
+        // const tri_canonical = sortTri(tri);
+        const a = tri[0];
+        const b = tri[1];
+        const c = tri[2];
+        // must refer to edge verts in sorted order!
+        try self.updateEdgeAddTri(.{ a, b }, tri);
+        try self.updateEdgeAddTri(.{ b, c }, tri);
+        try self.updateEdgeAddTri(.{ a, c }, tri);
     }
 
-    pub fn removeTrisFromEdgeMap(self: *Self, tris: []Tri) !void {
-        for (tris) |tri| {
-            const tri_canonical = sortTri(tri);
-            const a = tri_canonical[0];
-            const b = tri_canonical[1];
-            const c = tri_canonical[2];
-            try self.remTriFromEdgeMap(.{ a, b }, tri_canonical);
-            try self.remTriFromEdgeMap(.{ b, c }, tri_canonical);
-            try self.remTriFromEdgeMap(.{ a, c }, tri_canonical);
-        }
+    fn removeTriFromEdgeMap(self: *Self, tri: Tri) void {
+        const a = tri[0];
+        const b = tri[1];
+        const c = tri[2];
+        self.updateEdgeRemoveTri(.{ a, b }, tri);
+        self.updateEdgeRemoveTri(.{ b, c }, tri);
+        self.updateEdgeRemoveTri(.{ a, c }, tri);
     }
 
     const eql = std.mem.eql;
 
-    pub fn mapEdgeToTri(self: *Self, _e: Edge, _tri: Tri) !void {
+    fn updateEdgeAddTri(self: *Self, _e: Edge, _tri: Tri) !void {
         const e = sortEdge(_e);
         const tri = sortTri(_tri);
 
@@ -339,7 +339,8 @@ pub const Mesh2D = struct {
         }
         var entry = _entry.?;
 
-        if (entry[0] == null) return error.InconsistentEdgeState;
+        if (entry[0] == null) unreachable;
+        // return error.InconsistentEdgeState;
 
         // at least one entry must be non-null
         if (eql(u32, &entry[0].?, &tri)) return; // already exists
@@ -350,19 +351,22 @@ pub const Mesh2D = struct {
         if (eql(u32, &entry[1].?, &tri)) return; // already exists
 
         // map was already full. we're trying to add a tri without deleting existing ones first.
-        return error.EdgeMapFull;
+        
+        // return error.EdgeMapFull;
+        unreachable;
     }
 
     // we know e maps to tri already. if it's not there, throw err.
-    pub fn remTriFromEdgeMap(self: *Self, _e: Edge, _tri: Tri) !void {
-        const e = sortEdge(_e);
-        const tri = sortTri(_tri);
+    fn updateEdgeRemoveTri(self: *Self, e: Edge, tri: Tri) void {
+        // const e = sortEdge(_e);
+        // const tri = sortTri(_tri);
         var _entry = self.edge2tri.getPtr(e);
         if (_entry == null) {
             // const t2 = self.edge2tri.getPtr(.{e[1],e[0]});
             // print2(@src(),"t2 ? = {any}\n",.{t2.?.*});
             print2(@src(),"edge = {any}\n",.{e});
-            return error.EdgeDoesntExist; // must already exist.
+            // return error.EdgeDoesntExist; // must already exist.
+            unreachable;
         }
 
         var entry = _entry.?;
@@ -385,7 +389,8 @@ pub const Mesh2D = struct {
             // the tri we want to remove isn't here !
             else {
                 // print2(@src(),"edge {d} , tri {d} , entry {any} \n",.{_e,tri,entry.*});
-                return error.InconsistentEdgeState;
+                // return error.InconsistentEdgeState;
+                unreachable;
             }
         };
 
@@ -396,7 +401,8 @@ pub const Mesh2D = struct {
         // const BB = [2]bool;
 
         if (b0 and b1) {
-            return error.InconsistentEdgeState;
+            // return error.InconsistentEdgeState;
+            unreachable;
         }
         if (b0 and !b1) {
             entry.* = .{ tri1, null };
@@ -406,10 +412,10 @@ pub const Mesh2D = struct {
             entry.* = .{ tri0, null };
             return;
         } // remove 2nd position
-        print2(@src(),"edge {d} tri 0 1 {d} , {d} , {d} , {d} \n",.{_e, e, tri,tri0,tri1},);
-        self.show();
+
         if (!b0 and !b1) {
-            return error.InconsistentEdgeState;
+            // return error.InconsistentEdgeState;
+            unreachable;
         }
     }
 
@@ -421,38 +427,21 @@ pub const Mesh2D = struct {
     // add triangles (a,b,c) for each edge (a,b) of polygon connected to centerpoint (c).
     // should we also remove any existing triangles (a,b,x) ?
     //
-    pub fn addPointInPolygon(self: *Self, pt_idx: PtIdx, polygon: []PtIdx) !void {
+    // pub fn addPointInPolygon(self: *Self, pt_idx: PtIdx, polygon: []PtIdx) !void {
 
-        // for (polygon) |_,i| {
-        //     const edge = sortEdge( Edge{polygon[i],polygon[(i+1) % polygon.len]} );
-        //     if (self.edge2tri.get(edge)==null) {
-        //         print2(@src(),"fail with {d} → null\n",.{edge});
-        //         const revedge = Edge{edge[1],edge[0]};
-        //         const val = self.edge2tri.get(revedge);
-        //         print2(@src(),"but rev(edge) = {d} → {d} \n", .{revedge,val});
-        //         return error.InvalidPolygon;
-        //     }
-        // }
+    //     var tri_list = try self.al.alloc(Tri, polygon.len);
+    //     defer self.al.free(tri_list);
+    //     for (polygon) |_, i| {
+    //         const edge = Edge{ polygon[i], polygon[(i + 1) % polygon.len] };
+    //         tri_list[i] = sortTri(Tri{ edge[0], edge[1], pt_idx });
+    //     }
 
-        // ok now we're committed . add pt to vs, then add new edges and remove old edges.
-        // try self.vs.append(pt);
-        // const idx = try self.addPt(pt);
-        // const idx = @intCast(u32, self.vs.items.len);
+    //     // now add them to mesh and update self
+    //     // try self.addTris(tri_list);
 
-        // make list of triangles to add
-        var tri_list = try self.al.alloc(Tri, polygon.len);
-        defer self.al.free(tri_list);
-        for (polygon) |_, i| {
-            const edge = Edge{ polygon[i], polygon[(i + 1) % polygon.len] };
-            tri_list[i] = sortTri(Tri{ edge[0], edge[1], pt_idx });
-        }
-
-        // now add them to mesh and update self
-        try self.addTris(tri_list);
-
-        print2(@src(),"Show for pt_idx {d} poly {d} \n", .{ pt_idx, polygon });
-        self.show();
-    }
+    //     // print2(@src(),"Show for pt_idx {d} poly {d} \n", .{ pt_idx, polygon });
+    //     // self.show();
+    // }
 
     pub fn sortTri(_tri: Tri) Tri {
         var tri = _tri;

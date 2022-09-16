@@ -21,9 +21,9 @@
 - [x] Evaluate actual tracking performance
 - [x] replace O(n^2)-space container for temporal edges
 - [x] fast spatial nn data struct. grid hash. 
+- [ ] Speed up delaunay
 - [ ] routines to rasterize continuous shapes
 - [ ] show flow direction in tracking images
-- [ ] Speed up delaunay
 - [ ] delaunay 3D
 - [ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
 - [ ] use grid_hash for faster NN lookup when building DAG.
@@ -72,5 +72,11 @@ Can we sub-class AutoHashMap and override the `put` and `get` methods ?
 each module should have separate log destination ? and an extra that's unified?
 
 
+## Fast Delaunay
 
-
+- [ ] profiling
+- [ ] multiple implementations
+- [ ] speed test suite
+- [ ] more efficient way to find first conflicting triangle?
+- [ ] better geometric datastructure with fewer hashes.
+    - [ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 

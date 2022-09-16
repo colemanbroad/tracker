@@ -1,10 +1,22 @@
-usingnamespace ("geometry.zig");
+const g = @import("geometry.zig");
 
-const draw = @import("drawing.zig");
-const drawPoints3DMovie = draw.drawPoints3DMovie;
-const drawMesh3DMovie2 = draw.drawMesh3DMovie2;
+const BoxPoly = g.BoxPoly;
+const Mesh = g.Mesh;
+const Vec3 = g.Vec3;
+const subdivideMesh = g.subdivideMesh;
+const randNormalVec3 = g.randNormalVec3;
+const chaikinPeriodic = g.chaikinPeriodic;
 
-const home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/";
+const std = @import("std");
+
+const draw = @import("drawing_basic.zig");
+
+// const draw = @import("drawing.zig");
+// const drawPoints3DMovie = @import("drawing.zig").drawPoints3DMovie;
+// const drawMesh3DMovie2 = @import("drawing.zig").drawMesh3DMovie2;
+
+const filename  = @src().file;
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/" ++ filename;
 
 test "geometry. mesh. subdivideMesh()" {
     // pub fn main() !void {
@@ -31,9 +43,10 @@ test "geometry. mesh. subdivideMesh()" {
 
 test "geometry. mesh. Chaikin Curve" {
     const npts: u32 = 10;
-    // var pts = try allocator.alloc(Vec3,npts*(1<<nsubdiv));
-    const pts0 = try allocator.alloc(Vec3, npts);
-    defer allocator.free(pts0);
+    var a = std.testing.allocator;
+    // var pts = try a.alloc(Vec3,npts*(1<<nsubdiv));
+    const pts0 = try a.alloc(Vec3, npts);
+    defer a.free(pts0);
     // var pts0:[npts]Vec3 = undefined;
     pts0[0] = randNormalVec3();
     const dx = Vec3{ 0.01, 0.01, 0.01 };
@@ -44,7 +57,7 @@ test "geometry. mesh. Chaikin Curve" {
     }
 
     const curve = try chaikinPeriodic(pts0);
-    defer allocator.free(curve);
+    defer a.free(curve);
 
     const home = test_home ++ "chaikin/";
     // try mkdirIgnoreExistsAbsolute(home);

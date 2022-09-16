@@ -1,6 +1,7 @@
 const std = @import("std");
 const im = @import("imageBase.zig");
 const geo = @import("geometry.zig");
+const draw = @import("drawing_basic.zig");
 
 const print = std.debug.print;
 const assert = std.debug.assert;
@@ -15,13 +16,14 @@ const Pix = @Vector(2, u32);
 const Vec3 = geo.Vec3;
 const Range = geo.Range;
 const BBox = geo.BBox;
-const Tri = @import("delaunay.zig").Tri;
-const GridHash = @import("grid_hash.zig").GridHash;
+// const Tri = @import("delaunay.zig").Tri;
+const Tri = [3]u32;
+// const GridHash = @import("grid_hash.zig").GridHash;
 
 const clipi = geo.clipi;
 const floor = std.math.floor;
 
-const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/TriangleHash/";
+const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/grid_hash2/";
 
 // pub fn thisDir() []const u8 {
 //     return std.fs.path.dirname(@src().file) orelse ".";
@@ -45,8 +47,9 @@ const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/Trian
 const V2u32 = @Vector(2, u32);
 const V2i32 = @Vector(2, i32);
 
-const GridHash2 = struct {
+pub const GridHash2 = struct {
     const Self = @This();
+    // const Elem = u8;
     const Elem = u8;
 
     nx: u16,
@@ -57,7 +60,7 @@ const GridHash2 = struct {
     scale: Vec2,
     bbox: BBox,
 
-    fn init(a: Allocator, pts: []Vec2, nx: u16, ny: u16, nd: u8) !Self {
+    pub fn init(a: Allocator, pts: []Vec2, nx: u16, ny: u16, nd: u8) !Self {
         var grid = try a.alloc(?Elem, nx * ny * nd);
         for (grid) |*v| v.* = null;
 
@@ -76,32 +79,31 @@ const GridHash2 = struct {
         };
     }
 
-    fn deinit(self: Self, a: Allocator) void {
+    pub fn deinit(self: Self, a: Allocator) void {
         a.free(self.grid);
     }
 
-    fn world2grid(self: Self, world_coord: Vec2) V2u32 {
+    pub fn world2grid(self: Self, world_coord: Vec2) V2u32 {
         const v = @floor((world_coord - self.offset) / self.scale);
         const v0 = std.math.clamp(v[0], 0, @intToFloat(f32, self.nx - 1));
         const v1 = std.math.clamp(v[1], 0, @intToFloat(f32, self.ny - 1));
         return .{ @floatToInt(u32, v0), @floatToInt(u32, v1) };
     }
 
-    fn world2gridNoBounds(self: Self, world_coord: Vec2) V2i32 {
+    pub fn world2gridNoBounds(self: Self, world_coord: Vec2) V2i32 {
         const v = @floor((world_coord - self.offset) / self.scale);
         return .{ @floatToInt(i32, v[0]), @floatToInt(i32, v[1]) };
     }
 
-    fn gridCenter2World(self: Self, gridpt: V2u32) Vec2 {
+    pub fn gridCenter2World(self: Self, gridpt: V2u32) Vec2 {
         // const gp = @as(V2u32,gridpt);
         const gp = (pix2Vec2(gridpt) + Vec2{ 0.5, 0.5 }) * self.scale + self.offset;
         return gp;
         // const gp_world = gridpt
-
     }
 
     // World coordinates
-    fn getWc(self: Self, pt: Vec2) []?Elem {
+    pub fn getWc(self: Self, pt: Vec2) []?Elem {
         const pt_grid = self.world2grid(pt);
         const idx = self.nd * (pt_grid[0] * self.ny + pt_grid[1]);
         const res = self.grid[idx .. idx + self.nd];
@@ -109,7 +111,7 @@ const GridHash2 = struct {
     }
 
     // World coordinates
-    fn setWc(self: Self, pt: Vec2, val: Elem) bool {
+    pub fn setWc(self: Self, pt: Vec2, val: Elem) bool {
         const res = self.getWc(pt);
 
         for (res) |*v| {
@@ -123,24 +125,93 @@ const GridHash2 = struct {
     }
 
     // Pix coordinates
-    fn getPc(self: Self, pt_grid: [2]u32) []?Elem {
+    pub fn getPc(self: Self, pt_grid: [2]u32) []?Elem {
         const idx = self.nd * (pt_grid[0] * self.ny + pt_grid[1]);
         const res = self.grid[idx .. idx + self.nd];
         return res;
     }
 
     // Pix coordinates
-    fn setPc(self: Self, pt_grid: [2]u32, val: Elem) bool {
+    pub fn setPc(self: Self, pt_grid: [2]u32, val: Elem) bool {
         const res = self.getPc(pt_grid);
 
         for (res) |*v| {
-            if (v.* == val) return true;
             if (v.* == null) {
                 v.* = val;
                 return true;
             }
+            if (v.*.? == val) return true;
         }
         return false;
+    }
+
+    // Pix coordinates
+    pub fn unSetPc(self: Self, pt_grid: [2]u32, val: Elem) bool {
+        const res = self.getPc(pt_grid);
+
+        for (res) |*v| {
+            if (v.* == null) return false;
+            if (v.*.? == val) {
+                v.* = null;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Add circle label to every box if box centroid is inside circle
+    pub fn addCircleToGrid(self: Self, ccircle: CircleR2, label: Elem) void {
+
+        // get bounding box in world coordinates
+        const r = @sqrt(ccircle.r2);
+        // const circle = Circle{.center=ccircle.pt , .radius=r};
+
+        const xmin = ccircle.pt[0] - r;
+        const xmax = ccircle.pt[0] + r;
+        const ymin = ccircle.pt[1] - r;
+        const ymax = ccircle.pt[1] + r;
+
+        // now loop over grid boxes inside circle's bbox and set pixels inside
+        var xy_min = self.world2grid(.{ xmin, ymin });
+        const xy_max = self.world2grid(.{ xmax, ymax });
+        print("xy_min={d}\n", .{xy_min});
+        print("xy_max={d}\n", .{xy_max});
+        const dxy = xy_max - xy_min + V2u32{ 1, 1 };
+        const nidx = @reduce(.Mul, dxy);
+        var idx: u16 = 0;
+        while (idx < nidx) : (idx += 1) {
+            const pix = xy_min + V2u32{ idx / dxy[1], idx % dxy[1] };
+
+            if (!pixInCircle(self, pix, ccircle)) continue;
+            const b = self.setPc(pix, label);
+            if (b == false) print("pix false {d}\n", .{pix});
+        }
+    }
+
+    pub fn removeCircleFromGrid(self: Self, ccircle: CircleR2, label: Elem) void {
+
+        // get bounding box in world coordinates
+        const r = @sqrt(ccircle.r2);
+        // const circle = Circle{.center=ccircle.pt , .radius=r};
+
+        const xmin = ccircle.pt[0] - r;
+        const xmax = ccircle.pt[0] + r;
+        const ymin = ccircle.pt[1] - r;
+        const ymax = ccircle.pt[1] + r;
+
+        // now loop over grid boxes inside circle's bbox and set pixels inside
+        var xy_min = self.world2grid(.{ xmin, ymin });
+        const xy_max = self.world2grid(.{ xmax, ymax });
+        const dxy = xy_max - xy_min + V2u32{ 1, 1 };
+        const nidx = @reduce(.Mul, dxy);
+        var idx: u16 = 0;
+        while (idx < nidx) : (idx += 1) {
+            const pix = xy_min + V2u32{ idx / dxy[1], idx % dxy[1] };
+
+            if (!pixInCircle(self, pix, ccircle)) continue;
+            const b = self.unSetPc(pix, label);
+            if (b == false) print("pix false {d}\n", .{pix});
+        }
     }
 };
 
@@ -155,35 +226,6 @@ const CircleR2 = geo.CircleR2;
 
 // To test if a realspace line intersects a grid box we CANT just take equally spaced samples along the line,
 // because we might skip a box if the intersection is very small.
-
-// Add circle label to every box if box centroid is inside circle
-pub fn addCircleToGrid(grid_hash: GridHash2, ccircle: CircleR2, label: u8) void {
-
-    // get bounding box in world coordinates
-    const r = @sqrt(ccircle.r2);
-    // const circle = Circle{.center=ccircle.pt , .radius=r};
-
-    const xmin = ccircle.pt[0] - r;
-    const xmax = ccircle.pt[0] + r;
-    const ymin = ccircle.pt[1] - r;
-    const ymax = ccircle.pt[1] + r;
-
-    // now loop over grid boxes inside circle's bbox and set pixels inside
-    var xy_min = grid_hash.world2grid(.{ xmin, ymin });
-    const xy_max = grid_hash.world2grid(.{ xmax, ymax });
-    print("xy_min={d}\n", .{xy_min});
-    print("xy_max={d}\n", .{xy_max});
-    const dxy = xy_max - xy_min + V2u32{ 1, 1 };
-    const nidx = @reduce(.Mul, dxy);
-    var idx: u16 = 0;
-    while (idx < nidx) : (idx += 1) {
-        const pix = xy_min + V2u32{ idx / dxy[1], idx % dxy[1] };
-
-        if (!pixInCircle(grid_hash, pix, ccircle)) continue;
-        const b = grid_hash.setPc(pix, label);
-        if (b == false) print("pix false {d}\n", .{pix});
-    }
-}
 
 const Circle = @import("rasterizer.zig").Circle;
 
@@ -200,7 +242,8 @@ fn pixInCircle(grid: GridHash2, pix: V2u32, circle: CircleR2) bool {
     return distance < circle.r2;
 }
 
-pub fn main() !void {
+// pub fn main() !void {
+test "test GridHash2" {
     print("\n", .{});
 
     // raw data
@@ -218,7 +261,7 @@ pub fn main() !void {
         comptime var i: u16 = 0;
         inline while (i < 3) : (i += 1) {
             const ccircle = geo.getCircumcircle2dv2(pts[4 * i .. 4 * i + 3].*);
-            addCircleToGrid(grid_hash, ccircle, 100);
+            grid_hash.addCircleToGrid(ccircle, 100);
         }
     }
 
@@ -226,7 +269,7 @@ pub fn main() !void {
         const gc = grid_hash.world2grid(p);
         draw.drawCircleOutline(picture, @intCast(i32, gc[0]), @intCast(i32, gc[1]), 3, .{ 255, 255, 255, 255 });
     }
-    try im.saveRGBA(picture, "trialpicture.tga");
+    try im.saveRGBA(picture, test_home ++ "trialpicture.tga");
 
     // now draw filled in circles
     var idx: u32 = 0;
@@ -235,7 +278,7 @@ pub fn main() !void {
         const gel = if (gelems[0]) |g| g else continue;
         picture.img[idx] = .{ gel, 0, gel, 255 };
     }
-    try im.saveRGBA(picture, "trialpicture.tga");
+    try im.saveRGBA(picture, test_home ++ "trialpicture.tga");
 }
 
 fn vec2Pix(v: Vec2) Pix {
@@ -244,8 +287,6 @@ fn vec2Pix(v: Vec2) Pix {
         @floatToInt(u32, v[1]),
     };
 }
-
-const draw = @import("drawing_basic.zig");
 
 // // list of grid coordinates which overlap tri
 // fn triToGridBoxes(grid:GridHash , tri:Tri) [][2]u32 {}

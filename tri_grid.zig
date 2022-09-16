@@ -72,7 +72,8 @@ pub const GridHash2 = struct {
     scale: Vec2,
     bbox: BBox,
 
-    triset: std.AutoHashMap(Elem, void),
+    // triset: std.AutoHashMap(Elem, void),
+    a: Allocator,
 
     pub fn init(a: Allocator, pts: []Vec2, nx: u16, ny: u16, nd: u16) !Self {
         var grid = try a.alloc(?Elem, nx * ny * @intCast(u32, nd));
@@ -90,13 +91,14 @@ pub const GridHash2 = struct {
             .offset = offset,
             .scale = scale,
             .bbox = bbox,
-            .triset = std.AutoHashMap(Elem, void).init(a),
+            // .triset = std.AutoHashMap(Elem, void).init(a),
+            .a = a,
         };
     }
 
-    pub fn deinit(self: *Self, a: Allocator) void {
-        a.free(self.grid);
-        self.triset.deinit();
+    pub fn deinit(self: *Self) void {
+        self.a.free(self.grid);
+        // self.triset.deinit();
         self.* = undefined;
     }
 
@@ -133,13 +135,22 @@ pub const GridHash2 = struct {
 
     pub fn add(self:Self, pt:V2u32, val:Elem) !void {
         const mem = self.get(pt);
-        // const T = @TypeOf(val[0]);
         for (mem) |*v| {
             if (v.* == null) {v.* = val; return;}
-            // if (eql(T, &v.*.?, &val)) return;
             if (triEql(v.*.?, val)) return;
         }
         return error.OutOfSpace;
+    }
+
+    // double self.nd and grid size. keep triset, nx, ny same.
+    pub fn doubleSizeND(self:*Self) !void {
+        const new_grid = try self.a.alloc(?Elem, self.grid.len*2);
+        for (new_grid) |*v| v.* = null;
+        for (self.grid) |v,i| new_grid[2*i] = v;
+        self.a.free(self.grid);
+        self.grid = new_grid;
+        self.nd = 2 * self.nd;
+        print("DOUBLING SIZE.... \n",.{});
     }
 
     fn triEql(t1:Tri, t2:Tri) bool {
@@ -185,6 +196,8 @@ pub const GridHash2 = struct {
 
     // Add circle label to every box if box centroid is inside circle
     fn addCircleToGrid(self: Self, ccircle: CircleR2, label: Elem) !void {
+
+        // if (label==null) @breakpoint();
 
         // get bounding box in world coordinates
         const r = @sqrt(ccircle.r2);
@@ -261,12 +274,16 @@ pub const GridHash2 = struct {
         return distance < circle.r2;
     }
 
+    // does the sorting for you
     pub fn addTri(self: *Self, _tri: Tri, pts: []const Vec2) !void {
         const tri = geo.Mesh2D.sortTri(_tri);
         const tripts = [3]Vec2{ pts[tri[0]], pts[tri[1]], pts[tri[2]] };
         const circle_r2 = geo.getCircumcircle2dv2(tripts);
-        try self.addCircleToGrid(circle_r2, tri);
-        self.triset.put(tri,{}) catch unreachable; // FIXME
+        self.addCircleToGrid(circle_r2, tri) catch |err| switch (err) {
+            error.OutOfSpace => try self.doubleSizeND(),
+            else => unreachable,
+        };
+        // self.triset.put(tri,{}) catch unreachable; // FIXME
     }
 
     pub fn remTri(self: *Self, _tri: Tri, pts: []const Vec2) void {
@@ -274,64 +291,29 @@ pub const GridHash2 = struct {
         const tripts = [3]Vec2{ pts[tri[0]], pts[tri[1]], pts[tri[2]] };
         const circle_r2 = geo.getCircumcircle2dv2(tripts);
         self.removeCircleFromGrid(circle_r2, tri);
-        _ = self.triset.remove(tri);
+        // _ = self.triset.remove(tri);
     }
+
+    // fn indexOf()
 
     pub fn getFirstConflict(self: Self, pt:Vec2, pts: []const Vec2) !Tri {
         const mem = self.get(self.world2grid(pt));
-        // print("mem: {d}\n",.{mem[0..self.triset.count() + 3]});
+        // const idx = std.mem.indexOf(?Elem, mem, &.{null}).?;
+        // print("mem: {d}\n",.{mem[0..idx + 3]});
+
+        // var count:u8 =0;
+        // for (mem) |tri| {if (tri!=null) {count += 1;}}
+        // print("pix : {d} , count : {d}\n", .{self.world2grid(pt) , count});
+
         for (mem) |tri| {
-        // var it = self.triset.iterator();
-        // while (it.next()) |kv| {
-        //     const tri:?Elem = kv.key_ptr.*;
-            if (tri==null) break;
+            if (tri==null) continue;
             const tripts = [3]Vec2{ pts[tri.?[0]], pts[tri.?[1]], pts[tri.?[2]] };
-            if (geo.pointInTriangleCircumcircle2d(pt, tripts)) return tri.?;
+            if (geo.pointInTriangleCircumcircle2d(pt, tripts)) {
+                return tri.?;
+            }
         }
         unreachable;
-        // return error.NotFound;
-
-        // var firsttri: ?Tri = null;
-        // const gridelems = trigrid.getWc(p);
-        // print2(@src(), "p {d} , gridelems = {d} \n",.{p, gridelems[0..7].*});
-        // var gridelems_nonull = try allo.alloc(Tri, gridelems.len);
-        // defer allo.free(gridelems_nonull);
-        // {
-        // var head:u8=0;
-        // for (gridelems) |g| {
-        //     if (g==null) continue;
-        //     gridelems_nonull[head] = g.?;
-        //     head += 1;
-        // }
-        // gridelems_nonull = allo.resize(gridelems_nonull, head).?;
-        // }
-
-        // if (gridelems_nonull.len != trigrid.triset.count()) {
-        //     var it = trigrid.triset.iterator();
-        //     while (it.next()) |x| {
-        //         print("{d}\n",.{x.key_ptr.*});
-        //     }
-        //     unreachable;
-        // }
-
-        // try draw_mesh.rasterizeHighlightStuff(mesh2d, "gridelems.tga", &.{p}, &.{}, gridelems_nonull);
-        // // _ = try waitForUserInput();
-
-        // for (gridelems) |maybetri,i| {
-        //     print2(@src(),"maybetri {d} , i {}\n",.{maybetri,i});
-        //     // assert that we will always hit a non-null element before loop ends (because we always hit a triangle)
-        //     if (maybetri == null) unreachable;
-        //     // get circle associated with tri and test if it contains `p`. if yes, break;
-        //     const tripts = [3]Vec2{ pts[maybetri.?[0]], pts[maybetri.?[1]], pts[maybetri.?[2]] };
-        //     if (geo.pointInTriangleCircumcircle2d(p, tripts)) {
-        //         firsttri = geo.Mesh2D.sortTri(maybetri.?);
-        //         break;
-        //     }
-        // }
-        // if (firsttri == null) unreachable;
     }
-
-
 
 };
 

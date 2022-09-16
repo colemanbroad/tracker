@@ -4,6 +4,8 @@ const geo = @import("geometry.zig");
 const grid_hash = @import("tri_grid.zig");
 const draw_mesh = @import("draw_mesh.zig");
 
+const ztracy = @import("ztracy");
+
 fn waitForUserInput() !i64 {
     if (@import("builtin").is_test) return 0;
 
@@ -131,7 +133,7 @@ pub const Tri = [3]u32;
 /// Goal: speed up triangle checking
 /// Have: queue and technique iteration given first intersecting triangle
 /// Need: fast access to _any_ intersecting triangle. (see TriangleHash.zig)
-/// 
+///
 
 // for (points) |p| (nearby pts first)
 //   tri0 = getOverlappingTri
@@ -140,9 +142,14 @@ pub const Tri = [3]u32;
 //     mark all invalid
 //
 
+const global_state = .{ .nx = 10, .ny = 10, .nd = 200 };
+
 /// Implementation of Bowyer-Watson algorithm for 2D tessellations
 /// SORTS _PTS IN PLACE !
-pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
+// pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
+pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) !geo.Mesh2D {
+    const full_tracy_zone = ztracy.ZoneNC(@src(), "full", 0x00_ff_00_00);
+    defer full_tracy_zone.End(); // ztracy
 
     // SET UP INITIAL POINTS //
 
@@ -168,15 +175,15 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
 
     // PTS IS NOW FIXED. THE MEMORY DOESN'T CHANGE,
 
-
     // ALLOC MEMORY FOR ALGORITHM GLOBAL STATE
 
     // GridHash of triangles' conflicting areas
-    var trigrid = try grid_hash.GridHash2.init(allo, pts, 2, 2, @intCast(u16,pts.len)*2);
-    defer trigrid.deinit(allo);
+    // var trigrid = try grid_hash.GridHash2.init(allo, pts, 50, 50, 40); //@intCast(u16,pts.len)*2);
+    // defer trigrid.deinit();
+
     // easy access to triangle neibs via edges
-    var mesh2d = try geo.Mesh2D.init(allo, pts);
-    defer mesh2d.deinit();
+    var mesh2d = try geo.Mesh2D.init(allo, pts); // RETURN IT
+    // defer mesh2d.deinit();
 
     // ALLOC MEM FOR TEMPORARY STATE WHICH IS RE-INITIALIZED EACH LOOP.
 
@@ -191,17 +198,17 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     var bad_triangles = std.ArrayList(Tri).init(allo);
     defer bad_triangles.deinit();
     // Holds edges on polygon border
-    var polyedges = try std.ArrayList(Edge).initCapacity(allo, pts.len);
-    defer polyedges.deinit();
+    var polygon_edges = try std.ArrayList(Edge).initCapacity(allo, pts.len);
+    defer polygon_edges.deinit();
     // Count edge occurrences each round to identify bounding polygon.
     var edge_label = std.AutoHashMap(Edge, u2).init(allo);
     defer edge_label.deinit();
 
-    print2(
-        @src(),
-        "mesh2d items len = {d}\n",
-        .{mesh2d.vs.items.len},
-    );
+    // print2(
+    //     @src(),
+    //     "mesh2d items len = {d}\n",
+    //     .{mesh2d.vs.items.len},
+    // );
 
     // INITIALIZE GLOBAL STATE //
 
@@ -209,36 +216,41 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
     const big_tri = Tri{ n_pt - 3, n_pt - 2, n_pt - 1 };
 
     // try triangles.put(big_tri, {});
-    try trigrid.addTri(big_tri, pts);
-    try mesh2d.addTris(&[_]Tri{big_tri});
+    // try trigrid.addTri(big_tri, pts);
+    try mesh2d.addTri(big_tri);
 
     // mesh2d.show();
 
     // MAIN LOOP OVER (nonboundary) POINTS
 
     for (pts[0 .. pts.len - 3]) |p, idx_pt| {
+        const loop_tracy_zone = ztracy.ZoneNC(@src(), "loop", 0x00_ff_00_00);
+        defer loop_tracy_zone.End(); // ztracy
 
         // RESET LOOP STATE
-        print2(
-            @src(),
-            "\n\nLOOP BEGIN {}\n\n",
-            .{idx_pt},
-        );
-        print2(
-            @src(),
-            "All Tris = {d}\n",
-            .{try mesh2d.validTris(allo)},
-        );
+        // print2(
+        //     @src(),
+        //     "\n\nLOOP BEGIN {}\n\n",
+        //     .{idx_pt},
+        // );
+        // print2(
+        //     @src(),
+        //     "All Tris = {d}\n",
+        //     .{try mesh2d.validTris(allo)},
+        // );
 
+        const clearCapacity_tracy_zone = ztracy.ZoneNC(@src(), "clearCapacity", 0x00_ff_00_00);
         search_queue.head = 0;
         search_queue.tail = 1;
         search_queue.q = undefined;
         triangle_label.clearRetainingCapacity();
         bad_triangles.clearRetainingCapacity();
-        polyedges.clearRetainingCapacity();
+        polygon_edges.clearRetainingCapacity();
         edge_label.clearRetainingCapacity();
 
-        // TODO speed up by only looping over nearby triangles.
+        clearCapacity_tracy_zone.End(); // ztracy
+
+        // TODO: speed up by only looping over nearby triangles.
         // How can we _prove_ that a set of triangles are invalid?
         // We just need to check triangles starting from center until we have a unique polygon
         // of bad edges where the inner triangles each fail circumcircle test but the outer triangles don't.
@@ -260,66 +272,92 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
         // quickly find triangle that conflicts with pt `p`
         // if (idx_pt==10) @breakpoint();
 
-
-
-        // print2(@src(), "firsttri {d} \n", .{firsttri});
-
         // while Q isn't empty, local search and update triangle_label.
-        search_queue.q[0] = try trigrid.getFirstConflict(p,pts);
-        while (search_queue.head < search_queue.tail) {
-            // get next triangle in Q and advance head
-            const current_tri = search_queue.q[search_queue.head].?;
-            search_queue.head += 1;
+        // search_queue.q[0] = try trigrid.getFirstConflict(p,pts);
 
-            // if we've already seen next tri, then continue, else add to visited
-            var maybe_entry = try triangle_label.getOrPut(current_tri);
-            if (maybe_entry.found_existing) continue;
-            maybe_entry.value_ptr.* = .Good; // default good
+        // search_queue.q[0] = blk: {
+        //     var it = mesh2d.ts.iterator();
+        //     while (it.next()) |kv| {
+        //         const tri = kv.key_ptr.*;
+        //         const tripts = [3]Vec2{ pts[tri[0]], pts[tri[1]], pts[tri[2]] };
+        //         if (geo.pointInTriangleCircumcircle2d(p, tripts)) {
+        //             break :blk tri;
+        //         }
+        //     }
+        //     unreachable;
+        // };
 
-            // test if current_tri conflicts with pt. if not then continue.
-            const tripts = [3]Vec2{ pts[current_tri[0]], pts[current_tri[1]], pts[current_tri[2]] };
-            if (!geo.pointInTriangleCircumcircle2d(p, tripts)) continue;
+        // while (search_queue.head < search_queue.tail) {
+        //     // get next triangle in Q and advance head
+        //     const current_tri = search_queue.q[search_queue.head].?;
+        //     search_queue.head += 1;
 
-            // since it conflicts add it to bad_triangles
-            maybe_entry.value_ptr.* = .Evil;
+        //     // if we've already seen next tri, then continue, else add to visited
+        //     var maybe_entry = try triangle_label.getOrPut(current_tri);
+        //     if (maybe_entry.found_existing) continue;
+        //     maybe_entry.value_ptr.* = .Good; // default good
 
-            // See which neibs of current_tri exist and add them to Q if unvisited.
-            const neibs = mesh2d.getTriNeibs(current_tri);
-            for (neibs) |t| {
-                if (t == null) continue;
-                const tri = geo.Mesh2D.sortTri(t.?);
-                if (triangle_label.contains(tri)) continue;
+        //     // test if current_tri conflicts with pt. if not then continue.
+        //     const tripts = [3]Vec2{ pts[current_tri[0]], pts[current_tri[1]], pts[current_tri[2]] };
+        //     if (!geo.pointInTriangleCircumcircle2d(p, tripts)) continue;
 
-                // exists and hasn't been visited yet, so add to Q
-                search_queue.q[search_queue.tail] = tri;
-                search_queue.tail += 1;
-            }
-        }
+        //     // since it conflicts add it to bad_triangles
+        //     maybe_entry.value_ptr.* = .Evil;
+
+        //     // See which neibs of current_tri exist and add them to Q if unvisited.
+        //     const neibs = mesh2d.getTriNeibs(current_tri);
+        //     for (neibs) |t| {
+        //         if (t == null) continue;
+        //         const tri = geo.Mesh2D.sortTri(t.?);
+        //         if (triangle_label.contains(tri)) continue;
+
+        //         // exists and hasn't been visited yet, so add to Q
+        //         search_queue.q[search_queue.tail] = tri;
+        //         search_queue.tail += 1;
+        //     }
+        // }
 
         // fill bad_triangles
+        // {
+        //     var it = triangle_label.iterator();
+        //     while (it.next()) |kv| {
+        //         if (kv.value_ptr.* == .Good) continue;
+        //         try bad_triangles.append(kv.key_ptr.*);
+        //     }
+        // }
+
         {
-            var it = triangle_label.iterator();
+            const bad_tri_tracy_zone = ztracy.ZoneNC(@src(), "bad_tri", 0x00_ff_00_00);
+            defer bad_tri_tracy_zone.End(); // ztracy
+
+            var it = mesh2d.ts.iterator();
             while (it.next()) |kv| {
-                if (kv.value_ptr.* == .Good) continue;
-                try bad_triangles.append(kv.key_ptr.*);
+                const tri = kv.key_ptr.*;
+                const tripts = [3]Vec2{ pts[tri[0]], pts[tri[1]], pts[tri[2]] };
+                if (geo.pointInTriangleCircumcircle2d(p, tripts)) {
+                    try bad_triangles.append(tri);
+                }
             }
         }
 
-        print2(
-            @src(),
-            "bad triangles : {d} \n",
-            .{bad_triangles.items},
-        );
+        // print2(
+        //     @src(),
+        //     "bad triangles : {d} \n",
+        //     .{bad_triangles.items},
+        // );
 
-        print2(@src()," trigrid.getWc(p) = \n {d} \n" ,.{trigrid.getWc(p)[0..7].*});
+        // print2(@src()," trigrid.getWc(p) = \n {d} \n" ,.{trigrid.getWc(p)[0..7].*});
         // Remove bad triangles from all datastructures
-        for (bad_triangles.items) |tri| trigrid.remTri(tri, pts);
-        try mesh2d.removeTris(bad_triangles.items);
-        print2(@src()," trigrid.getWc(p) = \n {d} \n" ,.{trigrid.getWc(p)[0..7].*});
+        // for (bad_triangles.items) |tri| trigrid.remTri(tri, pts);
+        for (bad_triangles.items) |tri| {
+            mesh2d.removeTri(tri);
+        }
 
         // trigrid
 
         // GET BOUNDING POLYGON
+
+        const bound_poly_tracy_zone = ztracy.ZoneNC(@src(), "bound_poly", 0x00_ff_00_00);
 
         // count the number of occurrences of each edge in bad triangles. unique edges occur once.
         for (bad_triangles.items) |_tri| {
@@ -337,80 +375,90 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Vec2) ![]Tri {
         // edges that occur once are added to polyedges
         var it = edge_label.iterator();
         while (it.next()) |kv| {
-            if (kv.value_ptr.* == 1) try polyedges.append(kv.key_ptr.*);
+            if (kv.value_ptr.* == 1) try polygon_edges.append(kv.key_ptr.*);
         }
+
         // organize edges to make ordered polygon traversing boundary.
-        var polygon = try allo.alloc([2]u32, polyedges.items.len);
-        defer allo.free(polygon);
-        for (polygon) |*v, i| v.* = polyedges.items[i];
+        // for (polygon) |*v, i| v.* = polyedges.items[i];
+        var edges = polygon_edges.items;
         var head: u16 = 0;
         var tail: u16 = 1;
-        while (tail < polygon.len) {
-            const target = polygon[head][1];
-            const compare = polygon[tail];
+        while (tail < edges.len) {
+            const target = edges[head][1];
+            const compare = edges[tail];
             if (compare[0] == target) {
-                polygon[tail] = polygon[head + 1];
-                polygon[head + 1] = compare;
+                edges[tail] = edges[head + 1];
+                edges[head + 1] = compare;
                 head += 1;
                 tail = head + 1;
                 continue;
             }
             if (compare[1] == target) {
-                polygon[tail] = polygon[head + 1];
-                polygon[head + 1] = .{ compare[1], compare[0] };
+                edges[tail] = edges[head + 1];
+                edges[head + 1] = .{ compare[1], compare[0] };
                 head += 1;
                 tail = head + 1;
                 continue;
             }
             tail += 1;
         }
-        if (head != polyedges.items.len - 1) unreachable; // we should pass through the entire chain exactly
-        var polygon2 = try allo.alloc(u32, polygon.len);
-        defer allo.free(polygon2);
-        for (polygon2) |*v, i| v.* = polygon[i][0];
+        if (head != edges.len - 1) unreachable; // we should pass through the entire chain exactly
 
-        try draw_mesh.rasterizeHighlightStuff(mesh2d, "boundary.tga", &.{p}, polygon, &.{});
+        bound_poly_tracy_zone.End(); // ztracy
 
+        // try draw_mesh.rasterizeHighlightStuff(mesh2d, "boundary.tga", &.{p}, polygon, &.{});
 
         // Add new triangles to mesh and grid d.s.
-        try mesh2d.addPointInPolygon(@intCast(u32, idx_pt), polygon2);
-        // mesh2d.show();
-
-        for (polygon2) |_, i| {
-            const tri = geo.Mesh2D.sortTri(Tri{ polygon2[i], polygon2[(i + 1) % polygon2.len], @intCast(u32, idx_pt) });
-
-            // const tripts = [3]Vec2{pts[tri[0]] , pts[tri[1]] , pts[tri[2]]};
-            try trigrid.addTri(tri, pts);
-
+        const addPointInPoly_tracy_zone = ztracy.ZoneNC(@src(), "addPointInPoly", 0x00_ff_00_00);
+        for (edges) |e| {
+            try mesh2d.addTri(.{ e[0], e[1], @intCast(u32, idx_pt) });
         }
+        addPointInPoly_tracy_zone.End(); // ztracy
 
-
-        // try draw_mesh.rasterize(mesh2d, "drawtemp.tga");
-        const img_name = try std.fmt.allocPrint(allo, "delaunay-vid/img{d:0>3}.tga", .{idx_pt});
-        defer allo.free(img_name);
-        try draw_mesh.rasterizeHighlightTri(mesh2d, img_name, bad_triangles.items);
-        // _ = try waitForUserInput();
-
-        assert(mesh2d.ts.count()==trigrid.triset.count());
-        print2(@src(),"counts : mesh2d {} trigrid {}\n",.{mesh2d.ts.count() , trigrid.triset.count()});
     }
 
-    // put final set of valid triangles into []Tri
-    var idx_valid: u32 = 0;
-    var validtriangles = try allo.alloc(Tri, mesh2d.ts.count());
-    var it = mesh2d.ts.keyIterator();
-    while (it.next()) |tri_ptr| {
-        // @compileLog("Tri Type :" , @TypeOf(tri_ptr.*));
-        // remove triangles containing starting points
-        if (std.mem.max(u32, tri_ptr) >= n_pt - 3) continue;
-        validtriangles[idx_valid] = tri_ptr.*;
-        idx_valid += 1;
+    // remove boundary points from mesh2d
+
+    // for (trigrid.triset.)
+    var it = mesh2d.ts.iterator();
+    while (it.next()) |kv| {
+        // test triangles for boundary vertices
+        const tri = kv.key_ptr.*;
+        if (containsAny(u32, &tri, &.{ n_pt - 3, n_pt - 2, n_pt - 1 })) {
+            mesh2d.removeTri(tri);
+        }
     }
 
-    validtriangles = try allo.realloc(validtriangles, idx_valid);
-    // @src(),print("There were {d} valid out of / {d} total triangles. validtriangles has len={d}.\n", .{idx_valid, triangles.items.len, validtriangles.len},);
+    // cheap way to remove the last 3 vertices (big triangle vertices)
+    mesh2d.vs.items.len -= 3;
 
-    return validtriangles;
+    return mesh2d;
+
+    // // put final set of valid triangles into []Tri
+    // var idx_valid: u32 = 0;
+    // var validtriangles = try allo.alloc(Tri, mesh2d.ts.count());
+    // var it = mesh2d.ts.keyIterator();
+    // while (it.next()) |tri_ptr| {
+    //     // @compileLog("Tri Type :" , @TypeOf(tri_ptr.*));
+    //     // remove triangles containing starting points
+    //     if (std.mem.max(u32, tri_ptr) >= n_pt - 3) continue;
+    //     validtriangles[idx_valid] = tri_ptr.*;
+    //     idx_valid += 1;
+    // }
+
+    // validtriangles = try allo.realloc(validtriangles, idx_valid);
+    // // @src(),print("There were {d} valid out of / {d} total triangles. validtriangles has len={d}.\n", .{idx_valid, triangles.items.len, validtriangles.len},);
+
+    // return validtriangles;
+}
+
+fn containsAny(comptime T: type, list: []const T, badlist: []const T) bool {
+    for (list) |v| {
+        for (badlist) |b| {
+            if (v == b) return true;
+        }
+    }
+    return false;
 }
 
 pub fn removeNullFromList(comptime T: type, arr: []T) []T {
@@ -428,12 +476,15 @@ const process = std.process;
 
 // test "delaunay. basic delaunay" {
 pub fn main() !void {
+    const pixels_loop_tracy_zone = ztracy.ZoneNC(@src(), "main", 0x00_ff_00_00);
+    defer pixels_loop_tracy_zone.End();
+
     const alloc = std.testing.allocator;
 
     const nparticles = if (@import("builtin").is_test) 100 else blk: {
         var arg_it = try process.argsWithAllocator(alloc);
         _ = arg_it.skip(); // skip exe name
-        const npts_str = arg_it.next() orelse "100";
+        const npts_str = arg_it.next() orelse "4000";
         break :blk try std.fmt.parseUnsigned(usize, npts_str, 10);
     };
 
@@ -443,12 +494,16 @@ pub fn main() !void {
     for (verts) |*v| v.* = .{ random.float(f32), random.float(f32) };
     defer alloc.free(verts); // changes size when we call delaunay2d() ...
 
-    const triangles = try delaunay2d(alloc, verts);
-    defer alloc.free(triangles);
+    // const triangles = try delaunay2d(alloc, verts);
+    // defer alloc.free(triangles);
+    var mesh = try delaunay2d(alloc, verts);
+    defer mesh.deinit();
 
-    print2(
-        @src(),
+    try draw_mesh.rasterize(mesh, "delaunay_result.tga");
+
+    print(
+        // @src(),
         "\n\nfound {} triangles on {} vertices\n",
-        .{ triangles.len, nparticles },
+        .{ mesh.ts.count(), nparticles },
     );
 }

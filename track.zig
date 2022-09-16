@@ -4,6 +4,7 @@
 const std = @import("std");
 const del = @import("delaunay.zig");
 const im = @import("imageBase.zig");
+const geo = @import("geometry.zig");
 
 const drawCircle = @import("drawing_basic.zig").drawCircle;
 const drawLineInBounds = @import("drawing_basic.zig").drawLineInBounds;
@@ -23,7 +24,7 @@ const max = std.math.max;
 // var allocator = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = std.testing.allocator; //(.{}){};
 const Pts3 = [3]f32;
-const Pts = del.Vec2;
+const Pts = geo.Vec2;
 
 const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/track/";
 test {
@@ -180,9 +181,10 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
     defer allocator.free(cost);
 
     // get delaunay triangles
-    // FIXME 2D only for now
-    const triangles = try del.delaunay2d(allocator, va[0..]);
-    defer allocator.free(triangles);
+    // FIXME: 2D only for now
+    var triangles = try del.delaunay2d(allocator, va[0..]);
+    defer triangles.deinit();
+    // defer allocator.free(triangles);
 
     // print("\n",.{});
     // for (triangles) |t,i| {
@@ -223,18 +225,23 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
     // WARNING: this will break early once we hit `null`. This is fine as long as the array is front-packed like
     // [value value value null null ...]
 
-    for (triangles) |tri| {
-        for (tri) |v, i| {
-            outer: for ([3]u32{ 0, 1, 2 }) |j| {
-                if (i == j) continue;
-                const v_neib = tri[j];
-                for (delaunay_array[v]) |v_neib_existing, k| {
-                    if (v_neib_existing == null) {
-                        delaunay_array[v][k] = v_neib;
-                        nn_distance_ditribution[v][k] = dist(Pts, va[v], va[v_neib]); // squared euclidean
-                        continue :outer;
+    {
+        var it = triangles.ts.iterator();
+        // for (triangles) |tri| {
+        while (it.next()) |kv| {
+            const tri = kv.key_ptr.*;
+            for (tri) |v, i| {
+                outer: for ([3]u32{ 0, 1, 2 }) |j| {
+                    if (i == j) continue;
+                    const v_neib = tri[j];
+                    for (delaunay_array[v]) |v_neib_existing, k| {
+                        if (v_neib_existing == null) {
+                            delaunay_array[v][k] = v_neib;
+                            nn_distance_ditribution[v][k] = dist(Pts, va[v], va[v_neib]); // squared euclidean
+                            continue :outer;
+                        }
+                        if (v_neib_existing.? == v_neib) continue :outer;
                     }
-                    if (v_neib_existing.? == v_neib) continue :outer;
                 }
             }
         }

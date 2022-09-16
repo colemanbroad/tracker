@@ -38,7 +38,7 @@ pub inline fn inbounds(img: anytype, px: anytype) bool {
 }
 
 // render mesh on top of pic. all white. fill in lines and faces. pure zig.
-pub fn drawMesh2D(mesh: Mesh2D, pic: Img2D([4]u8)) !void {}
+// pub fn drawMesh2D(mesh: Mesh2D, pic: Img2D([4]u8)) !void {}
 
 // render a 3D surface from a spiral trajectory
 pub fn drawMesh3DMovie2(surf: Mesh, name: []const u8) !void {
