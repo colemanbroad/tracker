@@ -40,8 +40,8 @@ def greedy_track(va,vb):
 
 
 def loadlib():
-  search_dir = "/zig-cache/o/"
-  files = glob("zig-cache/o/*/libtrack.dylib")
+  # search_dir = "/zig-cache/o/"
+  files = glob("../zig-cache/o/*/libtrack.dylib")
   files.sort(key=lambda x: os.path.getmtime(x))
   return ctypes.CDLL(files[-1])
 
@@ -81,15 +81,15 @@ def test_greedy_track2d_2(N):
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-def test_strain_track(N,viewer):
+def test_strain_track(N,): #viewer):
   va = 500 * np.random.rand(N,2).astype(dtype=np.float32)
   va = va - va.mean(0)
   A = np.array([[1-0.1,0.1],[-0.1,1-0.1]])
   A = A / np.linalg.norm(A,axis=0) #.abs().sum(0,keepdims=True)
   # ipdb.set_trace()
   vb = va.copy()@A
-  viewer.add_points(va)
-  viewer.add_points(vb,face_color='green')
+  # viewer.add_points(va)
+  # viewer.add_points(vb,face_color='green')
   res = strain_track(va,vb)
   return res
 

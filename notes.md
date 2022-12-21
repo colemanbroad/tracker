@@ -1,6 +1,7 @@
 
 "Geometric Data Structures for Computer Graphics" →  "Geometric Proximity Graph"
 
+
 # Literature
 
 [Info on numpy and ctypes](https://stackoverflow.com/questions/14887378/how-to-return-array-from-c-function-to-python-using-ctypes)
@@ -20,19 +21,26 @@
 - [x] priority queue for next vertex to choose
 - [x] Evaluate actual tracking performance
 - [x] replace O(n^2)-space container for temporal edges
-- [x] fast spatial nn data struct. grid hash. 
-- [ ] Speed up delaunay
-- [ ] routines to rasterize continuous shapes
-- [ ] show flow direction in tracking images
+- [ ] fast spatial nn data struct. grid hash. 
+
+- [x] tracy profiling
+- [ ] more efficient way to find first conflicting triangle?
+- [ ] speed test suite
 - [ ] delaunay 3D
-- [ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
-- [ ] use grid_hash for faster NN lookup when building DAG.
-- [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
-- [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
+- [ ] multiple implementations
+- [ ] better geometric datastructure with fewer hashes.
+    - [ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 
+
+- [ ] routines to rasterize continuous shapes
 - [ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
 
+- [ ] show flow direction in tracking images
+- [ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
+- [ ] use grid_hash for faster NN lookup when building tracking DAG.
+- [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
+- [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
 - [ ] vector median filter to clean up _any_ tracking
-- [ ] Viterbi Alg, but efficient. Don't build whole array, just small graph.
+- [ ] Viterbi tracker. Only consider local assignments = small transition matrix.
 - [ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
 - [ ] StarryNite
 - [ ] Fast Matching
@@ -42,10 +50,17 @@
 
 # Questions
 
-- [ ] how to use dynamic / static `.a` or `.dylib` lib from zig ? 
+- [x] how to use dynamic / static `.a` or `.dylib` lib from zig ? 
+
+Link static lib with `exe.addObjectFile("vendor/libcurl/lib/libcurl.a");`
+Link dynamic lib with 
+```
+exe.addIncludeDir("vendor/libcurl/include");
+exe.addLibPath("vendor/libcurl/lib");
+exe.linkSystemLibraryName("curl");
+```
 
 
-# topics
 
 ## Very Fast StrainCost Tracking
 
@@ -72,11 +87,37 @@ Can we sub-class AutoHashMap and override the `put` and `get` methods ?
 each module should have separate log destination ? and an extra that's unified?
 
 
-## Fast Delaunay
+## fast spatial nn data struct. grid hash.
 
-- [ ] profiling
-- [ ] multiple implementations
-- [ ] speed test suite
-- [ ] more efficient way to find first conflicting triangle?
-- [ ] better geometric datastructure with fewer hashes.
-    - [ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 
+Sep 22 2022
+- `tri_trid.zig`, `grid_hash2.zig`, `grid_hash.zig` cleanup
+- `drawing.zig`, `draw_mesh.zig`, `drawing_basic.zig` cleanup
+- `drawing` vs `rasterize` ?
+- `cam3d` vs `render3d` ?
+- ~~test~~
+
+
+The API I WANT is ...
+
+```go
+
+# abcdef 
+const edges:[][2]u32 = undefined
+const gr = topology.Graph().fromEdgeList(edges)
+
+const neib_list = gr.neibs(p)
+if (gr.maxDegree() < 4) {}
+if (gr.isRegular()) {}
+
+
+const kd = euclidean.dim2.KDTree()
+const p1 = kd.n_neib(p0)
+const p_list = kd.neibs(p0,10)
+const dx = euclidean.dist(p0,p1)
+
+const gh = euclidean.dim3.GridHash()
+
+
+```
+
+

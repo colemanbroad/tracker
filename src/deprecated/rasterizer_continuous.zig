@@ -1,25 +1,28 @@
-// Assume input points are in continuous grid coordinates, but haven't been clipped or rasterized.
+/// Experiments in drawing continuous shapes into an image.
+/// 
+
+const std = @import("std");
+const im = @import("image_base.zig");
+const geo = @import("geometry.zig");
+
 // All funcs accept closures ([2]u32 , context) → void which are executed once per pixel.
-// Are these funcs inlined?
+// Are these funcs inlined? When should we NOT inline, in general?
 
 // We want versions which trace object boundaries, but also version which fill in the object bulk.
 // We want different funcs for lines, curves, circles, etc.
 
-const std = @import("std");
-const im = @import("imageBase.zig");
-const cc = @import("c.zig");
-const geo = @import("geometry.zig");
-const cam3D = @import("Cam3D.zig");
+// const cc = @import("c.zig");
+// const cam3D = @import("Cam3D.zig");
+// const ren = @import("render.zig");
 
 const Img2D = im.Img2D;
-const Mesh = geo.Mesh;
 const Vec2 = geo.Vec2;
 const Vec3 = geo.Vec3;
-const PerspectiveCamera = cam3D.PerspectiveCamera;
-const Mesh2D = geo.Mesh2D;
+// const PerspectiveCamera = ren.PerspectiveCamera;
+// const Mesh2D = geo.Mesh2D;
 
 const sphereTrajectory = geo.sphereTrajectory;
-const rotate2cam = cam3D.rotate2cam;
+// const rotate2cam = cam3D.rotate2cam;
 const bounds3 = geo.bounds3;
 const gridMesh = geo.gridMesh;
 const vec2 = geo.vec2;
@@ -64,7 +67,6 @@ pub fn traceLineSegment(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Vec2)
     const dp = line_segment.stop - line_segment.start;
     const mag = length(dp);
     const dpn = dp / Vec2{ mag, mag };
-
     fnToRun(ctx, currentPoint);
     var countf32: f32 = 0;
 
@@ -78,10 +80,9 @@ pub fn traceLineSegment(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Vec2)
     }
 }
 
-// TODO fill in triangles.
-// TODO fill in circle.
-// TODO interface that passes pix AND ~distance~ small vec to pix. We could do some interesting coulor work based on this vec!
-
+/// TODO fill in triangles.
+/// TODO fill in circle.
+/// TODO interface that passes pix AND ~distance~ small vec to pix. We could do some interesting coulor work based on this vec!
 pub const Circle = struct { center: Vec2, radius: f32 };
 
 /// circle uses continuous pix coords with pixel centers at {i+0.5,j+0.5} for i,j in [0..]
@@ -118,9 +119,7 @@ const ImgCtx = struct {
 fn fnSetValImg(ctx: ImgCtx, pt: Pt) void {
     const buf = ctx.img;
     const root2 = @sqrt(2.0);
-
     if (pt[0] > @intToFloat(f32, buf.nx - 1) or pt[1] > @intToFloat(f32, buf.ny - 1)) return;
-
     var x0 = @floor(pt[0]);
     var y0 = @floor(pt[1]);
     var err = Pt{ x0, y0 } - pt; // always magnitude < 1

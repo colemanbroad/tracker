@@ -1,14 +1,17 @@
+/// What's the difference between drawing, drawing_basic, rasterizing_continuous, ?
+/// 
+
 const std = @import("std");
-const im = @import("imageBase.zig");
+const im = @import("image_base.zig");
 const cc = @import("c.zig");
 const geo = @import("geometry.zig");
 const cam3D = @import("Cam3D.zig");
 
 const Img2D = im.Img2D;
-const Mesh = geo.Mesh;
 const Vec2 = geo.Vec2;
 const Vec3 = geo.Vec3;
 const PerspectiveCamera = cam3D.PerspectiveCamera;
+const Mesh3D = geo.Mesh3D;
 const Mesh2D = geo.Mesh2D;
 
 const sphereTrajectory = geo.sphereTrajectory;
@@ -41,7 +44,7 @@ pub inline fn inbounds(img: anytype, px: anytype) bool {
 // pub fn drawMesh2D(mesh: Mesh2D, pic: Img2D([4]u8)) !void {}
 
 // render a 3D surface from a spiral trajectory
-pub fn drawMesh3DMovie2(surf: Mesh, name: []const u8) !void {
+pub fn drawMesh3DMovie2(surf: Mesh3D, name: []const u8) !void {
     const pic = try Img2D(f32).init(800, 600);
     defer pic.deinit();
 
@@ -196,7 +199,7 @@ pub fn faceZOrder(vertices: []Vec3, faces: [][4]u32) ![]u32 {
 }
 
 // ignore Z-dim and faces for now... just plotvertices and edges using XY
-pub fn drawMeshXY(surf: Mesh, picname: []const u8) !Img2D(f32) {
+pub fn drawMeshXY(surf: Mesh3D, picname: []const u8) !Img2D(f32) {
 
     // prepare canvas
     var nx: u32 = 2880;

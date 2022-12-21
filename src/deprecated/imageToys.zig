@@ -1,5 +1,5 @@
 const std = @import("std");
-const im = @import("imageBase.zig");
+const im = @import("image_base.zig");
 
 const cc = @import("c.zig");
 const geo = @import("geometry.zig");

@@ -6,7 +6,7 @@ pub fn thisDir() []const u8 {
 test {
     _ = @import("cam3d.zig");
     _ = @import("delaunay.zig");
-    _ = @import("imageBase.zig");
+    _ = @import("image_base.zig");
     _ = @import("drawing_basic.zig");
     _ = @import("geometry.zig");
     _ = @import("track.zig");

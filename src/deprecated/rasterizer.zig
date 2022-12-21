@@ -136,6 +136,24 @@ pub fn traceCircleFilled(ctx: anytype, fnToRun: fn (ctx: @TypeOf(ctx), pix: Pix)
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
+const BGRA = @Vector(4, u8);
+const ImgCtx = struct {
+    img: Img2D([4]u8),
+    val: BGRA,
+};
+
+fn fnSetValImg(ctx: ImgCtx, pix: Pix) void {
+    const buf = ctx.img;
+    const val2 = @intCast(u8, pix[0] % 255);
+    if (pix[0] < 0 or pix[0] >= buf.nx or pix[1] < 0 or pix[1] >= buf.ny) return;
+    const idx = pix[1] * buf.nx + pix[0];
+    buf.img[idx] = ctx.val +% BGRA{ val2 *% 2, 0, 0, 0 };
+    // im.saveRGBA(ctx.img, test_home ++ "traceCircleFilled.tga") catch unreachable;
+}
+
+
+
+
 // pub fn main() !void {
 test "test traceCircleFilled" {
     const nx = 1200;
@@ -176,19 +194,7 @@ test "test traceCircleOutline" {
     try im.saveRGBA(pic, test_home ++ "traceCircleOutline.tga");
 }
 
-const BGRA = @Vector(4, u8);
-const ImgCtx = struct {
-    img: Img2D([4]u8),
-    val: BGRA,
-};
-fn fnSetValImg(ctx: ImgCtx, pix: Pix) void {
-    const buf = ctx.img;
-    const val2 = @intCast(u8, pix[0] % 255);
-    if (pix[0] < 0 or pix[0] >= buf.nx or pix[1] < 0 or pix[1] >= buf.ny) return;
-    const idx = pix[1] * buf.nx + pix[0];
-    buf.img[idx] = ctx.val +% BGRA{ val2 *% 2, 0, 0, 0 };
-    // im.saveRGBA(ctx.img, test_home ++ "traceCircleFilled.tga") catch unreachable;
-}
+
 
 test "draw two lines" {
     var pic = try Img2D([4]u8).init(100, 100);

@@ -1,15 +1,15 @@
-// const std  = @import("std");
-// const im   = @import("imageBase.zig");
-// const geo  = @import("geometry.zig");
+const std  = @import("std");
+const im   = @import("image_base.zig");
+const geo  = @import("geometry.zig");
 // const draw = @import("drawing.zig");
 
-// const print = std.debug.print;
-// const assert = std.debug.assert;
-// const expect = std.testing.expect;
-// var allocator = std.testing.allocator;
-// const Allocator = std.mem.Allocator;
-// var prng = std.rand.DefaultPrng.init(0);
-// const random = prng.random();
+const print = std.debug.print;
+const assert = std.debug.assert;
+const expect = std.testing.expect;
+var allocator = std.testing.allocator;
+const Allocator = std.mem.Allocator;
+var prng = std.rand.DefaultPrng.init(0);
+const random = prng.random();
 
 // const Ray = geo.Ray;
 // const Vec3 = geo.Vec3;
@@ -18,16 +18,19 @@
 // const Img2D = im.Img2D;
 // const BoxPoly = geo.BoxPoly;
 
-// const abs = geo.abs;
-// const sphereTrajectory = geo.sphereTrajectory;
+const abs = geo.abs;
+const sphereTrajectory = geo.sphereTrajectory;
+const Vec3 = geo.Vec3;
+const Img3D = im.Img3D;
+
 // const normalize = geo.normalize;
 // const drawLineInBounds = draw.drawLineInBounds;
 // const cross = geo.cross;
 
-usingnamespace @import("Cam3D.zig");
+const render = @import("render3D.zig");
 
-const draw = @import("drawing.zig");
-const drawLineInBounds = draw.drawLineInBounds;
+// const draw = @import("drawing.zig");
+const drawLineInBounds = im.drawLineInBounds;
 
 test "cam3D. render stars with perspectiveProjection2()" {
     // pub fn main() !void {
@@ -52,7 +55,7 @@ test "cam3D. render stars with perspectiveProjection2()" {
             const camPt = traj[i] * Vec3{ 900, 900, 900 };
             // print("\n{d}",.{camPt});
             // const camPt = Vec3{400,50,50};
-            var cam2 = try PerspectiveCamera.init(
+            var cam2 = try render.PerspectiveCamera.init(
                 camPt,
                 .{ 0, 0, 0 },
                 401,
@@ -61,7 +64,7 @@ test "cam3D. render stars with perspectiveProjection2()" {
             );
             defer cam2.deinit();
 
-            perspectiveProjection2(img, &cam2);
+            render.perspectiveProjection2(img, &cam2);
 
             nameStr = try std.fmt.bufPrint(nameStr, "renderStarsWPerspective/img{:0>4}.tga", .{i});
             print("{s}\n", .{nameStr});
@@ -118,7 +121,7 @@ test "cam3D. test all PerspectiveCamera transformations" {
     //   try camTest();
     // }
     // pub fn camTest() !void {
-    var cam = try PerspectiveCamera.init(
+    var cam = try render.PerspectiveCamera.init(
         .{ 100, 100, 100 },
         .{ 50, 50, 50 },
         401,

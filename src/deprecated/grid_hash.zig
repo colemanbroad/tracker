@@ -1,11 +1,12 @@
+
 const std = @import("std");
-const im = @import("imageBase.zig");
+const im = @import("image_base.zig");
 const geo = @import("geometry.zig");
 
 const print = std.debug.print;
 const assert = std.debug.assert;
 const expect = std.testing.expect;
-var allocator = std.testing.allocator;
+// var allocator = std.testing.allocator;
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
@@ -16,44 +17,59 @@ const Range = geo.Range;
 const BBox = geo.BBox;
 
 const clipi = geo.clipi;
-const floor = std.math.floor;
 
-const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/spatial/";
+const test_home = "../test-artifacts/grid_hash/";
 
 test {
     std.testing.refAllDecls(@This());
 }
 
-test "spatial. bin random points onto 2D grid" {
-    // return error.SkipZigTest;
+/// run all experiments
+pub fn main() !void {
+    try test1();
+    try test2();
+    try test3();
+    try test4();
+}
 
-    var xs: [100]f32 = undefined;
-    for (xs) |*v| v.* = random.float(f32) * 100.0;
-    var ys: [100]f32 = undefined;
-    for (ys) |*v| v.* = random.float(f32) * 100.0;
 
+
+fn randomFloats(comptime n:u32) [n]f32 {
+    var x:[n]f32 = undefined;
+    for (x) |*v| v.* = random.float(f32) * 100.0;
+    return x;
+}
+
+
+/// test spatial. bin random points onto 2D grid
+fn test1() !void {
+    var allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer allocator.deinit();
+    var allo = allocator.allocator();
+    im.allocator = allo; // Now image_base functions also use the Arena?! [this is bad practice as it hides allocations 😬]
+
+    const xs = randomFloats(100); // [0,100)
+    const ys = randomFloats(100);
     var grid = try im.Img2D(u8).init(10, 10);
-    defer grid.deinit();
 
     for (xs) |x, i| {
         const y = ys[i];
         const nx = @floatToInt(usize, x / 10);
         const ny = @floatToInt(usize, y / 10);
-
         grid.img[nx * 10 + ny] += 1;
     }
 
     var rgba = try im.Img2D([4]u8).init(10, 10);
-    defer rgba.deinit();
 
     for (grid.img) |g, i| {
         const r = @intCast(u8, (@intCast(u16, g) * 10) % 255);
         rgba.img[i] = .{ r, r, r, 255 };
     }
-    try im.saveRGBA(rgba, test_home ++ "spatial.tga");
+    try im.saveRGBA(rgba, test_home ++ "test1.tga");
 }
 
-test "spatial. GridHash" {
+/// test spatial. GridHash
+fn test2() !void {
     var pts: [100]Vec2 = undefined;
     for (pts) |*v| v.* = .{ random.float(f32) * 100.0, random.float(f32) * 100.0 };
 
@@ -61,22 +77,9 @@ test "spatial. GridHash" {
     defer gh.deinit();
     for (pts) |p| {
         _ = gh.neibs(p);
-        // print("{}→{d}\n",.{i,gh.neibs(p)});
+        print("{}→{d}\n",.{i,gh.neibs(p)});
     }
 }
-
-/// Points in 2D are placed into bins on a grid.
-/// The grid bins each spatial dimension and we remember a simple affine coordinate transformation for the bounds
-/// of the points.
-/// A grid with N boxes trained on pts with min=3.2, max=9.8 will divide space into bins of width dx=(9.8-3.2)/N, so
-/// any points in [3.2,3.2+dx) are mapped to idx=0, and ...
-///
-/// dx = (max-min)/nx
-/// points in [min + n*dx,min + (n+1)*dx) → grid[n]
-/// therefore, a point at x' maps to floor((x'-xmin)/dx)
-/// How can we efficiently figure out nx? That's tricky. If we have a radius constraint for NN checks, then it should just be the radius.
-/// MORE: See [Geometric Hashing](https://en.wikipedia.org/wiki/Geometric_hashing) as a potential
-/// way to make representation more compact, but with more indirection.
 
 // Prealloc idx and dist memory for fast multiple queries
 const IdsDists = struct {
@@ -105,8 +108,6 @@ const GridHash = struct {
     map: []Elem,
     nx: u32,
     ny: u32,
-    // dx: f32,
-    // dy: f32,
     nelemax: u32,
     allo: Allocator,
     bb: geo.BBox,
@@ -177,18 +178,10 @@ const GridHash = struct {
         self.allo.free(self.pts);
     }
 
-    // pub fn pt2grid(p:Vec2,bb:BBox,nx:u16,ny:u16) [2]u16 {
-    //   const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
-    //   const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
-    //   const ix = clipi(u16, @floatToInt(u16,floor((p[0]-bb.x.lo)/dx)) , 0, nx-1);
-    //   const iy = clipi(u16, @floatToInt(u16,floor((p[1]-bb.y.lo)/dy)) , 0, ny-1);
-    //   return .{ix,iy};
-    // }
-
-    pub fn x2grid(x: f32, xr: Range, nx: u32) u32 {
+    fn x2grid(x: f32, xr: Range, nx: u32) u32 {
         const dx = (xr.hi - xr.lo) / @intToFloat(f32, nx);
         // print("floor((x-xr.lo)/dx) = {}\n", .{floor((x-xr.lo)/dx)});
-        const ix = @floatToInt(i32, floor((x - xr.lo) / dx));
+        const ix = @floatToInt(i32, @floor((x - xr.lo) / dx));
         if (ix < 0) return 0;
         if (ix > nx - 1) return nx - 1;
         return @intCast(u32, ix);
@@ -256,47 +249,45 @@ const GridHash = struct {
     }
 
     // Write in-place to res_elems. no alloc required. assert k=knn.len
-    // pub fn knn(self:Self, p:Vec2, comptime k:u8, res_elems:[]u16) !void {
+    // pub fn knn(self: Self, p: Vec2, comptime k: u8, res_elems: []u16) !void {
+    //     const ix_start = x2grid(p[0], self.bb.x, self.nx);
+    //     const iy_start = x2grid(p[1], self.bb.y, self.ny);
 
-    //   const ix_start = x2grid(p[0], self.bb.x, self.nx);
-    //   const iy_start = x2grid(p[1], self.bb.y, self.ny);
+    //     var elems: [2 * k]u16 = undefined;
+    //     var dists: [2 * k]f32 = undefined;
 
-    //   var elems:[2*k]u16 = undefined;
-    //   var dists:[2*k]f32 = undefined;
+    //     var nn_count: usize = 0;
+    //     var k_count: u8 = 0;
+    //     var xid = ix_start;
 
-    //   var nn_count:usize = 0;
-    //   var k_count:u8 = 0;
-    //   var xid = ix_start;
+    //     var boxQ = std.Queue([2]u16); // box id
 
-    //   var boxQ = std.Queue([2]u16); // box id
+    //     while (!boxQ.isEmpty()) {
+    //         var yid = iy_start;
+    //         const idx = (xid * self.ny + yid) * self.nelemax;
+    //         // print("idx {} \n", .{idx});
+    //         const bin = self.map[idx .. idx + self.nelemax];
+    //         // print("p {} xid {} yid {} bin {d}\n", .{p,xid,yid,bin});
+    //         // print("neibs {d} \n", .{self.neibs(p)});
+    //         for (bin) |e_| {
+    //             const e = if (e_) |e| e else continue;
+    //             const pt_e = self.pts[e];
+    //             // const delta = p-pt_e;
+    //             // const mydist = @sqrt(@reduce(.Add,delta*delta));
+    //             const mydist = dist(Vec2, p, pt_e);
 
-    //   while (!boxQ.isEmpty()) {
-    //   var yid = iy_start;
-    //     const idx = (xid*self.ny + yid)*self.nelemax;
-    //     // print("idx {} \n", .{idx});
-    //     const bin = self.map[idx..idx+self.nelemax];
-    //     // print("p {} xid {} yid {} bin {d}\n", .{p,xid,yid,bin});
-    //     // print("neibs {d} \n", .{self.neibs(p)});
-    //     for (bin) |e_| {
-    //       const e = if (e_) |e| e else continue;
-    //       const pt_e = self.pts[e];
-    //       // const delta = p-pt_e;
-    //       // const mydist = @sqrt(@reduce(.Add,delta*delta));
-    //       const mydist = dist(Vec2, p, pt_e);
-
-    //       if (mydist<radius) {
-    //         // print("adding e={}\n",.{e});
-    //         nn_ids[nn_count] = e;
-    //         dists[nn_count] = mydist;
-    //         nn_count += 1;
-    //       }
+    //             if (mydist < radius) {
+    //                 // print("adding e={}\n",.{e});
+    //                 nn_ids[nn_count] = e;
+    //                 dists[nn_count] = mydist;
+    //                 nn_count += 1;
+    //             }
+    //         }
     //     }
-
-    //   }
-    //   }
-
-    //   res.n_ids.* = nn_count;
     // }
+
+    // res.n_ids.* = nn_count;
+    //   }
 };
 
 // array order is [a,b]. i.e. a has stride nb. b has stride 1.
@@ -324,8 +315,8 @@ fn dist(comptime T: type, x: T, y: T) f32 {
     };
 }
 
-// pub fn main() !void {
-test "spatial. radius neibs" {
+// test "test spatial. radius neibs" {
+fn test3() !void {
     const N = 5_000;
     var pts: [N]Vec2 = undefined;
     for (pts) |*v| v.* = .{ random.float(f32) * 100.0, random.float(f32) * 100.0 };
@@ -370,8 +361,8 @@ test "spatial. radius neibs" {
     }
 }
 
-// pub fn main() !void {
-test "spatial. radius speed test" {
+// test "test spatial. radius speed test" {
+fn test4() !void {
     var alltimes: [4][6]i128 = undefined;
 
     for (alltimes) |*timez| {
@@ -442,6 +433,7 @@ test "spatial. radius speed test" {
             print("{d:.3} ", .{t});
         }
     }
+    print("\n\n", .{});
 
     // var mean:[5]f32 = undefined;
     // for (alltimes) |_,i| {
@@ -466,11 +458,3 @@ test "spatial. radius speed test" {
     // print("\n\nmean...{d}\n", .{mean});
     // print("\n\nstd...{d}\n", .{stddev});
 }
-
-/// TODO:
-/// https://en.wikipedia.org/wiki/Geometric_hashing
-///
-/// Instead of keeping a dense array of grid locations we use an actual _hash_ function.
-/// GridHash doesn't actually hash! The GeometricHash uses the same Affine Translation + Quantization, but 
-/// then adds a Hash from the quantized coordinates to the object list e.g. [2]u8→[n]Obj
-const GeometricHash = struct {};

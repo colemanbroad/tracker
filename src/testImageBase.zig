@@ -1,4 +1,4 @@
-usingnamespace @import("imageBase.zig");
+usingnamespace @import("image_base.zig");
 
 const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/imageBase/";
 

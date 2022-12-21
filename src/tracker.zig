@@ -2,12 +2,12 @@
 // const del = @import("/Users/broaddus/Desktop/projects-personal/zig/zig-opencl-test/src/libdelaunay.a");
 
 const std = @import("std");
-const del = @import("delaunay.zig");
-const im = @import("imageBase.zig");
+const im = @import("image_base.zig");
 const geo = @import("geometry.zig");
+const del = @import("delaunay.zig");
 
-const drawCircle = @import("drawing_basic.zig").drawCircle;
-const drawLineInBounds = @import("drawing_basic.zig").drawLineInBounds;
+const drawCircle = im.drawCircle;
+const drawLineInBounds = im.drawLineInBounds;
 
 const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
@@ -21,6 +21,7 @@ const max = std.math.max;
 
 // Zig doesn't have tuple-of-types i.e. product types yet so all fields must be named. This is probably good.
 // https://github.com/ziglang/zig/issues/4335
+
 // var allocator = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = std.testing.allocator; //(.{}){};
 const Pts3 = [3]f32;
@@ -46,7 +47,7 @@ export fn sum(a: [*]i32, n: u32) i32 {
 }
 
 // pub fn main() !void {
-test "strain tracking" {
+test "test strain tracking" {
     print("\n\n", .{});
 
     const na = 101;
@@ -391,7 +392,7 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
     return asgn_b2a;
 }
 
-test "track. greedy Strain Tracking 2D" {
+test "test track. greedy Strain Tracking 2D" {
     print("\n\n", .{});
 
     const na = 101;
@@ -418,7 +419,7 @@ fn argmax1d(comptime T: type, arr: []T) struct { max: T, idx: usize } {
     return .{ .max = amax, .idx = idx };
 }
 
-test "track. greedy min-cost tracking 3D" {
+test "test track. greedy min-cost tracking 3D" {
     print("\n\n", .{});
 
     const na = 1001;
@@ -433,7 +434,7 @@ test "track. greedy min-cost tracking 3D" {
     defer allocator.free(parents);
 }
 
-test "track. greedy min-cost tracking 2D" {
+test "test track. greedy min-cost tracking 2D" {
     print("\n\n", .{});
 
     const na = 101;
