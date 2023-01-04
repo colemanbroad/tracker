@@ -1,10 +1,9 @@
 /// Delaunay Triangulations in 2D Euclidean Space using
 /// The Bowyer-Watson Algorithm.
-
 const std = @import("std");
 const g = @import("geometry.zig");
 const im = @import("image_base.zig");
-const ztracy = @import("ztracy");
+// const ztracy = @import("ztracy");
 
 const Allocator = std.mem.Allocator;
 const Pix = @Vector(2, u32);
@@ -63,7 +62,9 @@ pub fn print2(
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
-test {std.testing.refAllDecls(@This());}
+test {
+    std.testing.refAllDecls(@This());
+}
 
 /// Goal: speed up triangle checking
 /// Have: queue and technique iteration given first intersecting triangle
@@ -75,12 +76,10 @@ test {std.testing.refAllDecls(@This());}
 ///   while (tri_queue.next()) |tri_next|
 ///     mark all invalid
 ///
-
 /// Implementation of Bowyer-Watson algorithm for 2D tessellations
 pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
-    const full_tracy_zone = ztracy.ZoneNC(@src(), "full", 0x00_ff_00_00);
-    defer full_tracy_zone.End(); // ztracy
-
+    // const full_tracy_zone = ztracy.ZoneNC(@src(), "full", 0x00_ff_00_00);
+    // defer full_tracy_zone.End(); // ztracy
 
     // Copy _pts to pts. Add space for new bounding tri.
     var pts = try allo.alloc(Pt, _pts.len + 3);
@@ -98,13 +97,12 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
 
     // PTS IS NOW FIXED. THE MEMORY DOESN'T CHANGE,
 
-
     // GridHash of triangles' conflicting areas
     // var trigrid = try grid_hash.GridHash2.init(allo, pts, 50, 50, 40); //@intCast(u16,pts.len)*2);
     // defer trigrid.deinit();
 
     // easy access to triangle neibs via edges
-    var mesh2d = try Mesh2D.init(allo, pts); 
+    var mesh2d = try Mesh2D.init(allo, pts);
     // RETURN IT! Don't deinit().
 
     // Temporary state which is re-initialized each loop..
@@ -146,8 +144,8 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
     // MAIN LOOP OVER (nonboundary) POINTS
 
     for (pts[0 .. pts.len - 3]) |p, idx_pt| {
-        const loop_tracy_zone = ztracy.ZoneNC(@src(), "loop", 0x00_ff_00_00);
-        defer loop_tracy_zone.End(); // ztracy
+        // const loop_tracy_zone = ztracy.ZoneNC(@src(), "loop", 0x00_ff_00_00);
+        // defer loop_tracy_zone.End(); // ztracy
 
         // RESET LOOP STATE
         // print2(
@@ -161,7 +159,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         //     .{try mesh2d.validTris(allo)},
         // );
 
-        const clearCapacity_tracy_zone = ztracy.ZoneNC(@src(), "clearCapacity", 0x00_ff_00_00);
+        // const clearCapacity_tracy_zone = ztracy.ZoneNC(@src(), "clearCapacity", 0x00_ff_00_00);
         search_queue.head = 0;
         search_queue.tail = 1;
         search_queue.q = undefined;
@@ -169,7 +167,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         bad_triangles.clearRetainingCapacity();
         polygon_edges.clearRetainingCapacity();
         edge_label.clearRetainingCapacity();
-        clearCapacity_tracy_zone.End(); // ztracy
+        // clearCapacity_tracy_zone.End(); // ztracy
 
         // TODO: speed up by only looping over nearby triangles.
         // How can we _prove_ that a set of triangles are invalid?
@@ -248,8 +246,8 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         // }
 
         {
-            const bad_tri_tracy_zone = ztracy.ZoneNC(@src(), "bad_tri", 0x00_ff_00_00);
-            defer bad_tri_tracy_zone.End(); // ztracy
+            // const bad_tri_tracy_zone = ztracy.ZoneNC(@src(), "bad_tri", 0x00_ff_00_00);
+            // defer bad_tri_tracy_zone.End(); // ztracy
 
             var it = mesh2d.ts.iterator();
             while (it.next()) |kv| {
@@ -278,7 +276,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
 
         // GET BOUNDING POLYGON
 
-        const bound_poly_tracy_zone = ztracy.ZoneNC(@src(), "bound_poly", 0x00_ff_00_00);
+        // const bound_poly_tracy_zone = ztracy.ZoneNC(@src(), "bound_poly", 0x00_ff_00_00);
 
         // count the number of occurrences of each edge in bad triangles. unique edges occur once.
         for (bad_triangles.items) |_tri| {
@@ -325,16 +323,16 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         }
         if (head != edges.len - 1) unreachable; // we should pass through the entire chain exactly
 
-        bound_poly_tracy_zone.End(); // ztracy
+        // bound_poly_tracy_zone.End(); // ztracy
 
         // try draw_mesh.rasterizeHighlightStuff(mesh2d, "boundary.tga", &.{p}, polygon, &.{});
 
         // Add new triangles to mesh and grid d.s.
-        const addPointInPoly_tracy_zone = ztracy.ZoneNC(@src(), "addPointInPoly", 0x00_ff_00_00);
+        // const addPointInPoly_tracy_zone = ztracy.ZoneNC(@src(), "addPointInPoly", 0x00_ff_00_00);
         for (edges) |e| {
             try mesh2d.addTri(.{ e[0], e[1], @intCast(u32, idx_pt) });
         }
-        addPointInPoly_tracy_zone.End(); // ztracy
+        // addPointInPoly_tracy_zone.End(); // ztracy
 
     }
 
@@ -397,8 +395,8 @@ const process = std.process;
 
 // test "delaunay. basic delaunay" {
 pub fn main() !void {
-    const pixels_loop_tracy_zone = ztracy.ZoneNC(@src(), "main", 0x00_ff_00_00);
-    defer pixels_loop_tracy_zone.End();
+    // const pixels_loop_tracy_zone = ztracy.ZoneNC(@src(), "main", 0x00_ff_00_00);
+    // defer pixels_loop_tracy_zone.End();
 
     const alloc = std.testing.allocator;
 
@@ -428,7 +426,6 @@ pub fn main() !void {
         .{ mesh.ts.count(), nparticles },
     );
 }
-
 
 // const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/tri_grid/";
 
@@ -875,7 +872,8 @@ pub const Mesh2D = struct {
                 tri_no_null[tail] = tri.*;
                 tail += 1;
             }
-            break :blk a.resize(tri_no_null, tail).?;
+            if (a.resize(tri_no_null, tail) == false) unreachable;
+            break :blk tri_no_null;
         };
         return tris;
     }
@@ -904,7 +902,7 @@ pub const Mesh2D = struct {
     }
 
     /// Deprecated
-    pub fn addTriPts(self:*Self , tri:Tri , pts:[3]Pt) !void {
+    pub fn addTriPts(self: *Self, tri: Tri, pts: [3]Pt) !void {
         self.addPt(pts[0]);
         self.addPt(pts[1]);
         self.addPt(pts[2]);
@@ -1031,7 +1029,6 @@ pub const Mesh2D = struct {
             unreachable;
         }
     }
-
 
     /// STUB
     /// add triangles (a,b,c) for each edge (a,b) of polygon connected to centerpoint (c).

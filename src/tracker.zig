@@ -6,6 +6,9 @@ const im = @import("image_base.zig");
 const geo = @import("geometry.zig");
 const del = @import("delaunay.zig");
 
+const trace = @import("trace");
+pub const enable_trace = true; // must be enabled otherwise traces will be no-ops
+
 const drawCircle = im.drawCircle;
 const drawLineInBounds = im.drawLineInBounds;
 
@@ -19,11 +22,30 @@ var prng = std.rand.DefaultPrng.init(0);
 const min = std.math.min;
 const max = std.math.max;
 
+pub fn log(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    _ = scope;
+    _ = message_level;
+    const logfile = std.fs.cwd().createFile("timing.csv", .{ .truncate = false }) catch {
+        std.debug.print(format, args);
+        return;
+    };
+    logfile.seekFromEnd(0) catch {};
+    logfile.writer().print(format, args) catch {};
+    logfile.writer().writeByte(std.ascii.control_code.lf) catch {};
+    logfile.close();
+}
+
 // Zig doesn't have tuple-of-types i.e. product types yet so all fields must be named. This is probably good.
 // https://github.com/ziglang/zig/issues/4335
 
-// var allocator = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = std.testing.allocator; //(.{}){};
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+// var allocator = std.testing.allocator; //(.{}){};
 const Pts3 = [3]f32;
 const Pts = geo.Vec2;
 
@@ -85,6 +107,9 @@ const VStatusTag = enum(u3) {
 };
 
 export fn strain_track2d(va: [*]f32, na: u32, vb: [*]f32, nb: u32, res: [*]i32) i32 {
+    const span = trace.Span.open("strain_track2d");
+    defer span.close(); // Span is closed automatically when the function returns
+
     const va_ = allocator.alloc(Pts, na) catch return -1;
     for (va_) |*v, i| v.* = Pts{ va[2 * i], va[2 * i + 1] };
     const vb_ = allocator.alloc(Pts, nb) catch return -1;
@@ -336,7 +361,7 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
         if (v.idx == 0) {
             // print("va_idx={} , vb_idx={}\n",.{v.idx,vb_idx});
             // print("bingo dog: {}\n",.{nn_cost});
-            print("best: {} {}\n", .{ bestcost, bestidx });
+            print("best: {any} {any}\n", .{ bestcost, bestidx });
         }
 
         if (v.idx == 50) {

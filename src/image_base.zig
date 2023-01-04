@@ -5,9 +5,9 @@ const expect = std.testing.expect;
 const assert = std.debug.assert;
 
 const Allocator = std.mem.Allocator;
-// var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-// var allocator = gpa.allocator();
-pub var allocator = std.testing.allocator;
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+// pub var allocator = std.testing.allocator;
 
 // const root = @import("root");
 // const test_artifacts = @import("root").thisDir() ++ "test-artifacts/";

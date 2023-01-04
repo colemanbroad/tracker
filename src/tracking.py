@@ -13,6 +13,8 @@ plt.ion()
 import os
 from glob import glob
 
+homedir = "/Users/broaddus/Desktop/work/zig-tracker/"
+
 
 def strain_track(va,vb):
   va = va.astype(np.float32)
@@ -41,7 +43,7 @@ def greedy_track(va,vb):
 
 def loadlib():
   # search_dir = "/zig-cache/o/"
-  files = glob("../zig-cache/o/*/libtrack.dylib")
+  files = glob(homedir + "/zig-cache/o/*/libtrack.dylib")
   files.sort(key=lambda x: os.path.getmtime(x))
   return ctypes.CDLL(files[-1])
 
