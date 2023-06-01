@@ -11,12 +11,12 @@ fn print2(
     std.debug.print(s1[41..] ++ fmt, args);
 }
 
-
 test "resize a slice" {
     const alloc = std.testing.allocator;
     var pts = try alloc.alloc(f32, 100);
     defer alloc.free(pts);
-    pts = alloc.resize(pts, pts.len + 1).?;
+    const failed = alloc.resize(pts, pts.len + 1);
+    _ = failed;
 }
 
 test "resize many times" {
@@ -26,7 +26,7 @@ test "resize many times" {
         var pts = try alloc.alloc([2]f32, count);
         defer alloc.free(pts);
 
-        for (pts) |*v, j| {
+        for (pts, 0..) |*v, j| {
             const i = @intToFloat(f32, j);
             v.* = .{ i, i * i };
         }
@@ -45,10 +45,10 @@ test "resize many times" {
     }
 }
 
-fn testresize(_pts: [][2]f32) !void {
+fn testresize(pts: [][2]f32) !void {
     const alloc = std.testing.allocator;
-    var pts = alloc.resize(_pts, _pts.len + 3).?;
-    defer _ = alloc.shrink(pts, pts.len - 3);
+    _ = alloc.resize(pts, pts.len + 3);
+    defer _ = alloc.resize(pts, pts.len - 3);
     pts[pts.len - 3] = .{ 1, 0 };
     pts[pts.len - 2] = .{ 1, 1 };
     pts[pts.len - 1] = .{ 1, 2 };
@@ -77,9 +77,11 @@ pub fn collapseAllRepeated(comptime T: type, mem: []T) []T {
 }
 
 test "float cast on @Vector" {
-    const V = @Vector(2,u32);
-    const P = @Vector(2,f32);
-    const x = V{3,4};
-    _ = @intToFloat(P,x); // ERROR
+    const V = @Vector(2, u32);
+    const P = @Vector(2, f32);
+    _ = P;
+    const x = V{ 3, 4 };
+    _ = x;
+    // _ = @intToFloat(P, x); // Compile Error
     // _ = y;
 }

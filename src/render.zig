@@ -23,7 +23,7 @@ const pi = 3.1415926;
 // const Mesh3D = mesh.Mesh3D;
 
 // const sphereTrajectory = geo.sphereTrajectory;
-const abs = geo.abs;
+const l2norm = geo.l2norm;
 const normalize = geo.normalize;
 const cross = geo.cross;
 
@@ -61,7 +61,7 @@ pub fn perspectiveProjection2(image: Img3D(f32), cam: *PerspectiveCamera) void {
             // Now that both points are well defined we can cast rays from inside the volume!
 
             // Take maximum value along the intersecting line segment.
-            const intersectionLength = abs(intersection.pt1.? - intersection.pt0.?);
+            const intersectionLength = l2norm(intersection.pt1.? - intersection.pt0.?);
             var iz_f: f32 = 3;
             while (iz_f < intersectionLength - 1) : (iz_f += 1) {
 
@@ -162,7 +162,7 @@ fn cameraRotation(camPt_: Vec3, axisOrder: AxisOrder) Mat3x3 {
 }
 
 // pass in pointer-to-array or slice
-fn reverse_inplace(array_ptr: anytype) void {
+fn reverse_inplace(array: anytype) void {
     var temp = array[0];
     const n = array.len;
     var i: usize = 0;
@@ -194,7 +194,7 @@ test "test cameraRotation()" {
     print("Rotated z1: {d} \n", .{geo.matVecMul(rotM, z1)});
 
     try expect(x2[2] == 0);
-    try expect(abs(cross(x2, y2) - z2) < 1e-6);
+    try expect(l2norm(cross(x2, y2) - z2) < 1e-6);
 }
 
 const SCREENX: u16 = 2880;
@@ -267,7 +267,7 @@ pub const PerspectiveCamera = struct {
     // cam2world(worldOrigin) = {0,0,0}
     // cam2world(focalPoint) = cam.pointOfFocus
     pub fn cam2world(this: @This(), v0: Vec3) Vec3 {
-        // const p0 = Vec3{-abs(this.loc), 0 , 0}; // location of world origin in camera coordinates
+        // const p0 = Vec3{-l2norm(this.loc), 0 , 0}; // location of world origin in camera coordinates
         const v1 = geo.matVecMul(this.axes, v0);
         const v2 = v1 + this.loc;
         return v2;
@@ -411,11 +411,164 @@ test "cam3D. test trilinear interp" {
 pub fn sphereTrajectory() [100]Vec3 {
     var phis: [100]f32 = undefined;
     // for (phis) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * pi;
-    for (phis) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * pi;
+    for (&phis, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * pi;
     var thetas: [100]f32 = undefined;
-    // for (thetas) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * 2*pi;
-    for (thetas) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * 2 * pi;
+    // for (&thetas) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * 2*pi;
+    for (&thetas, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * 2 * pi;
     var pts: [100]Vec3 = undefined;
-    for (pts) |*v, i| v.* = Vec3{ @cos(phis[i]), @sin(thetas[i]) * @sin(phis[i]), @cos(thetas[i]) * @sin(phis[i]) }; // ZYX coords
+    for (&pts, 0..) |*v, i| v.* = Vec3{ @cos(phis[i]), @sin(thetas[i]) * @sin(phis[i]), @cos(thetas[i]) * @sin(phis[i]) }; // ZYX coords
     return pts;
+}
+
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/render/";
+
+test "cam3D. render stars with perspectiveProjection2()" {
+    // pub fn main() !void {
+
+    if (true) return error.SkipZigTest;
+
+    // try mkdirIgnoreExists("renderStarsWPerspective");
+    print("\n", .{});
+
+    var img = try randomStars(allocator);
+    defer allocator.free(img.img); // FIXME
+
+    var nameStr = try std.fmt.allocPrint(allocator, test_home ++ "renderStarsWPerspective/img{:0>4}.tga", .{0});
+    defer allocator.free(nameStr);
+
+    const traj = sphereTrajectory();
+
+    // {var i:u32=0; while(i<5):(i+=1){
+    {
+        var i: u32 = 0;
+        while (i < traj.len) : (i += 1) {
+
+            // const i_ = @intToFloat(f32,i);
+            const camPt = traj[i] * Vec3{ 900, 900, 900 };
+            // print("\n{d}",.{camPt});
+            // const camPt = Vec3{400,50,50};
+            var cam2 = try PerspectiveCamera.init(
+                camPt,
+                .{ 0, 0, 0 },
+                401,
+                301,
+                null,
+            );
+            defer cam2.deinit();
+
+            perspectiveProjection2(img, &cam2);
+
+            nameStr = try std.fmt.bufPrint(nameStr, test_home ++ "renderStarsWPerspective/img{:0>4}.tga", .{i});
+            print("{s}\n", .{nameStr});
+
+            // @breakpoint();
+
+            try im.saveF32AsTGAGreyNormed(cam2.screen, 301, 401, nameStr);
+        }
+    }
+
+    // var nameStr = try std.fmt.allocPrint(allocator, "rotproj/projImagePointsPerspective{:0>4}.tga", .{0}); // filename
+    // try im.saveU8AsTGAGrey(allocator, res, 100, 200, "projImagePoints.tga");
+}
+
+// img volume filled with stars. img shape is 50x100x200 .ZYX
+// WARNING: must free() Img3D.img field
+pub fn randomStars(allo: Allocator) !Img3D(f32) {
+    var img = blo: {
+        var data = try allo.alloc(f32, 50 * 100 * 200);
+        for (data) |*v| v.* = 0;
+        var img3d = Img3D(f32){
+            .img = data,
+            .nz = 50,
+            .ny = 100,
+            .nx = 200,
+        };
+        break :blo img3d;
+    };
+
+    // Generate 100 random 3D points. We include boundary conditions here! This is
+    // shape dependent. Might be better to separate this out into a separate call to `clamp`.
+    const nx = img.nx;
+    const ny = img.ny;
+    const nz = img.nz;
+    const nxy = nx * ny;
+
+    var i: u16 = 0;
+    while (i < 100) : (i += 1) {
+        const x0 = 1 + @intCast(u32, random.uintLessThan(u32, nx - 2));
+        const y0 = 1 + @intCast(u32, random.uintLessThan(u32, ny - 2));
+        const z0 = 1 + @intCast(u32, random.uintLessThan(u32, nz - 2));
+
+        // Add markers as star
+        img.img[z0 * nxy + y0 * nx + x0] = 1.0;
+        img.img[z0 * nxy + y0 * nx + x0 - 1] = 1.0;
+        img.img[z0 * nxy + y0 * nx + x0 + 1] = 1.0;
+        img.img[z0 * nxy + (y0 - 1) * nx + x0] = 1.0;
+        img.img[z0 * nxy + (y0 + 1) * nx + x0] = 1.0;
+        img.img[(z0 - 1) * nxy + y0 * nx + x0] = 1.0;
+        img.img[(z0 + 1) * nxy + y0 * nx + x0] = 1.0;
+    }
+
+    return img;
+}
+
+test "cam3D. test all PerspectiveCamera transformations" {
+    //   try camTest();
+    // }
+    // pub fn camTest() !void {
+    var cam = try PerspectiveCamera.init(
+        .{ 100, 100, 100 },
+        .{ 50, 50, 50 },
+        401,
+        301,
+        null,
+    );
+    defer cam.deinit();
+
+    print("\n", .{});
+
+    try expect(@reduce(.And, cam.world2cam(cam.loc) == Vec3{ 0, 0, 0 }));
+    print("cam.loc in cam coordinates : {d:.3} \n", .{cam.world2cam(cam.loc)});
+    const p1 = cam.world2cam(cam.pointOfFocus);
+    print("cam.pointOfFocus in cam coordinates : {d:.3} \n", .{p1});
+    try expect(p1[1] == 0);
+    try expect(p1[2] == 0);
+    const p0 = cam.world2cam(.{ 0, 0, 0 }); // origin in cam coordinates
+    print("origin in cam coordinates : {d:.3} \n", .{p0});
+    print("origin back to world coordinates : {d:.3} \n", .{cam.cam2world(p0)});
+    print("pointOfFocus : {d:.3} \n", .{cam.cam2world(cam.world2cam(cam.pointOfFocus))});
+
+    print("\n\nFuzz Testing\n\n", .{});
+    var i: u32 = 0;
+    while (i < 10) : (i += 1) {
+        const p2 = geo.randNormalVec3();
+        // const z  = p2[0];
+        // print("p2 = {d}\n",.{p2});
+
+        const d0 = cam.cam2world(cam.world2cam(p2)) - p2;
+        // print("c2w.w2c ... d0 = {d}\n",.{d0});
+        try expect(l2norm(d0) < 1e-4);
+
+        const d2 = cam.world2cam(cam.cam2world(p2)) - p2;
+        // print("c2w.w2c ... d2 = {d}\n",.{d2});
+        try expect(l2norm(d2) < 1e-4);
+
+        const rpx = .{ .x = random.int(u8), .y = random.int(u8) };
+        const pt2 = cam.pix2world(rpx);
+        const pt3 = (pt2 - cam.loc) * Vec3{ 1, 1, 1 } + cam.loc;
+        const px2 = cam.world2pix(pt3);
+        // print("rpx : {d}\n", .{rpx});
+        print("px2 : {any}\n", .{px2});
+
+        // const px0 = cam.world2pix(p2);
+        // print("px0 = {d}\n",.{px0});
+        // const pt3 = cam.pix2world(px0);
+        // print("pt3 = {d}\n",.{pt3});
+
+        // const r1 = Ray{.pt0=cam.loc , .pt1=pt3};
+        // const d1 = closestApproachRayPt(r1,p2);
+        // print("w2p.p2w ... d1 = {d}\n",.{d1});
+        // try expect(l2norm(d1-p2) < 1e-4);
+
+    }
 }

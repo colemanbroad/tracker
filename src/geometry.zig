@@ -44,12 +44,12 @@ pub fn randNormalVec2() Vec2 {
 pub fn sphereTrajectory() [100]Vec3 {
     var phis: [100]f32 = undefined;
     // for (phis) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * pi;
-    for (phis) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * pi;
+    for (&phis, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * pi;
     var thetas: [100]f32 = undefined;
     // for (thetas) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * 2*pi;
-    for (thetas) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * 2 * pi;
+    for (&thetas, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * 2 * pi;
     var pts: [100]Vec3 = undefined;
-    for (pts) |*v, i| v.* = Vec3{ @cos(phis[i]), @sin(thetas[i]) * @sin(phis[i]), @cos(thetas[i]) * @sin(phis[i]) }; // ZYX coords
+    for (&pts, 0..) |*v, i| v.* = Vec3{ @cos(phis[i]), @sin(thetas[i]) * @sin(phis[i]), @cos(thetas[i]) * @sin(phis[i]) }; // ZYX coords
     return pts;
 }
 
@@ -225,8 +225,8 @@ test "geometry. Axis aligned bounding box intersection test" {
         const ray = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 1, 3, 1 } };
         const box = Ray{ .pt0 = .{ 0, 0, 0 }, .pt1 = .{ 3, 3, 3 } };
         const res = intersectRayAABB(ray, box);
-        try expect(abs(res.pt0.? - Vec3{ 0, 0, 0 }) < 1e-6);
-        try expect(abs(res.pt1.? - Vec3{ 1, 3, 1 }) < 1e-6);
+        try expect(l2norm(res.pt0.? - Vec3{ 0, 0, 0 }) < 1e-6);
+        try expect(l2norm(res.pt1.? - Vec3{ 1, 3, 1 }) < 1e-6);
         print2(@src(), "{d}\n", .{res});
         print2(@src(), "\n", .{});
     }
@@ -541,9 +541,11 @@ pub const Vec2 = Vector(2, f32);
 pub fn vec2(a: [2]f32) Vec2 {
     return Vec2{ a[0], a[1] };
 }
+
 pub fn uvec2(a: [2]u32) Vec2 {
     return Vec2{ @intToFloat(f32, a[0]), @intToFloat(f32, a[1]) };
 }
+
 pub fn abs2(a: Vec2) f32 {
     return @sqrt(a[0] * a[0] + a[1] * a[1]);
 }
@@ -587,12 +589,12 @@ pub fn dot(a: Vec3, b: Vec3) f32 {
     return @reduce(.Add, a * b);
 }
 
-pub fn abs(a: Vec3) f32 {
+pub fn l2norm(a: Vec3) f32 {
     return @sqrt(dot(a, a));
 }
 
 pub fn normalize(a: Vec3) Vec3 {
-    const s = abs(a);
+    const s = l2norm(a);
     return a / @splat(3, s);
 }
 
@@ -678,11 +680,11 @@ test "geometry. rotYawPitchRoll()" {
     var i: u32 = 0;
     while (i < 100) : (i += 1) {
         const rv = normalize(randNormalVec3());
-        print2(@src(), "Len {} .. ", .{abs(rv)});
+        print2(@src(), "Len {} .. ", .{l2norm(rv)});
         const ypr = randNormalVec3() * Vec3{ 2 * pi, 2 * pi, 2 * pi };
         const rot = rotYawPitchRoll(ypr[0], ypr[1], ypr[2]);
         const rotatedVec = matVecMul(rot, rv);
-        print2(@src(), "Len After {} .. \n", .{abs(rotatedVec)});
+        print2(@src(), "Len After {} .. \n", .{l2norm(rotatedVec)});
     }
 }
 
@@ -696,7 +698,7 @@ pub fn rotateCwithRotorAB(vc: Vec3, va: Vec3, vb: Vec3) Vec3 {
     const k = cross(anorm, bnorm);
     const knorm = normalize(k);
     const cosTh = dot(anorm, bnorm);
-    const sinTh = abs(k);
+    const sinTh = l2norm(k);
     const res = vc * @splat(3, cosTh) + cross(knorm, vc) * @splat(3, sinTh) + knorm * @splat(3, dot(knorm, vc) * (1 - cosTh));
     return res;
 }
@@ -717,7 +719,7 @@ pub fn testRodriguezRotation() !void {
             const v1 = normalize(randNormalVec3()); // start
             const v2 = normalize(randNormalVec3()); // target
             const v3 = rotateCwithRotorAB(v1, v1, v2); // try to rotate start to target
-            print2(@src(), "Len After = {e:.3}\tDelta = {e:.3} \n", .{ abs(v3), abs(v2 - v3) });
+            print2(@src(), "Len After = {e:.3}\tDelta = {e:.3} \n", .{ l2norm(v3), l2norm(v2 - v3) });
         }
     }
 
@@ -733,7 +735,7 @@ pub fn testRodriguezRotation() !void {
             const v3 = rotateCwithRotorAB(v1, a, b); // try to rotate start to target
             const v4 = rotateCwithRotorAB(v2, a, b); // try to rotate start to target
             const dot2_ = dot(v3, v4);
-            print2(@src(), "len(pre) {d:10.5} len(post) {d:10.5} dot(pre) {d:10.5} dot(post) {d:10.5} delta={e:13.5}\n", .{ abs(v1), abs(v3), dot1_, dot2_, dot2_ - dot1_ });
+            print2(@src(), "len(pre) {d:10.5} len(post) {d:10.5} dot(pre) {d:10.5} dot(post) {d:10.5} delta={e:13.5}\n", .{ l2norm(v1), l2norm(v3), dot1_, dot2_, dot2_ - dot1_ });
             try std.testing.expect(dot1_ - dot2_ < 1e-6);
         }
     }

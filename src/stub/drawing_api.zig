@@ -1,15 +1,14 @@
-///
-/// NOTE: To test if a realspace line intersects a grid box we CANT just take equally spaced samples along the line,
-///     because we might skip a box if the intersection is very small.
-///
-///
-///
-///
-///
-///
+// NOTE: To test if a realspace line intersects a grid box we CANT just take equally spaced samples along the line,
+//     because we might skip a box if the intersection is very small.
+//
+//
+//
+//
+//
+//
 
-/// Create a Buffer, a Shape, DrawProperties (LineStyle). Then call `draw_xxx()`.
-/// Maybe also use an Affine mapping from shape coords ?
+// Create a Buffer, a Shape, DrawProperties (LineStyle). Then call `draw_xxx()`.
+// Maybe also use an Affine mapping from shape coords ?
 test "api 0" {
 
     // create and image (empty 2d buffer)
@@ -54,13 +53,13 @@ test "api 0 w affine" {
     draw(img, circle, linestyle, affine);
 }
 
-/// Pass func ptr to e.g. `traceLineSegment()`
-/// We use the Shape to compute an iteration over pixels Pix
-/// Then we pass Pix into fnDrawAtEachPixel to actually perform draing.
-/// This func may have internal state to e.g. do dashed lines / expand.
-/// This API FAILS if the LineStyle could affect the Pix iteration...
-/// It also feels less direct and more yucky.
-/// But it is the most generic. Pure separation of drawing from getting pixel path.
+// Pass func ptr to e.g. `traceLineSegment()`
+// We use the Shape to compute an iteration over pixels Pix
+// Then we pass Pix into fnDrawAtEachPixel to actually perform draing.
+// This func may have internal state to e.g. do dashed lines / expand.
+// This API FAILS if the LineStyle could affect the Pix iteration...
+// It also feels less direct and more yucky.
+// But it is the most generic. Pure separation of drawing from getting pixel path.
 test "api 2" {
     // We create image buffers
     const img = try im.Img2D([4]u8).init(100, 101);
@@ -73,8 +72,8 @@ test "api 2" {
     traceCircleOutline(ctx, fnDrawAtEachPixel, circle);
 }
 
-/// Turn shapes into Slices of pixel coordinates.
-/// Very simple. No draw calls. Probably
+// Turn shapes into Slices of pixel coordinates.
+// Very simple. No draw calls. Probably
 test "api 3" {
     // We create image buffers
     const img = try im.Img2D([4]u8).init(100, 101);
@@ -94,7 +93,10 @@ const shapes = struct {
         box,
     };
 
-    pub fn combine(sh1: Shape, sh2: Shape) Shape {}
+    pub fn combine(sh1: Shape, sh2: Shape) Shape {
+        _ = sh2;
+        _ = sh1;
+    }
     // pub fn add(sh1: Shape, sh2: Shape) Shape {}
 };
 
@@ -108,7 +110,6 @@ const MarkStyle = enum { solid, dashed };
 const BlendStyle = enum { add, overlay, multiply };
 const Color = [4]u8;
 const Affine = struct { offset = [2]f32, scale = [2]f32 };
-
 
 /// TODO: End cap style? Anti Aliasing? Think of all the properties in Affinities LineStyle!
 const Style = struct {

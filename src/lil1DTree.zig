@@ -1,5 +1,4 @@
 /// 1d version of `ok2DTree.zig`
-
 const std = @import("std");
 const geo = @import("geometry.zig");
 
@@ -53,7 +52,7 @@ fn deleteTree(a: Allocator, node: *KDNode) void {
 
 fn findNearest(root: *KDNode, pt: f32) Allocator.Error!f32 {
     var nearest_pt = root.splt.?;
-    var best_dist = std.math.absFloat(pt - root.splt.?);
+    var best_dist = abs(pt - root.splt.?);
     var current = root;
 
     // descend down branches until we get to a leaf. keep track of nearest point at all times.
@@ -62,7 +61,7 @@ fn findNearest(root: *KDNode, pt: f32) Allocator.Error!f32 {
         // we've made it to a leaf node. almost done.
         if (current.vals) |vals| {
             for (vals) |next_pt| {
-                const d = std.math.absFloat(pt - next_pt);
+                const d = abs(pt - next_pt);
                 if (d < best_dist) {
                     nearest_pt = next_pt;
                     best_dist = d;
@@ -74,7 +73,7 @@ fn findNearest(root: *KDNode, pt: f32) Allocator.Error!f32 {
         const splt_pt = current.splt.?;
 
         // test against split value
-        const d = std.math.absFloat(pt - splt_pt);
+        const d = abs(pt - splt_pt);
         if (d < best_dist) {
             nearest_pt = splt_pt;
             best_dist = d;
@@ -139,7 +138,12 @@ fn testNearest(a: Allocator, N: u32) !void {
     const pt = random.float(f32);
     const nearest2 = try findNearest(q, pt);
     print("pt = {} , nearest2 = {} \n", .{ pt, nearest2 });
-    try std.testing.expect(std.math.absFloat(pt - nearest2) < 10.0 / @intToFloat(f32, N));
+    try std.testing.expect(abs(pt - nearest2) < 10.0 / @intToFloat(f32, N));
+}
+
+fn abs(x: anytype) @TypeOf(x) {
+    if (x > 0) return x;
+    return -x;
 }
 
 test "find nearest test" {

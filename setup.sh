@@ -21,3 +21,6 @@ export PATH
 printf "Here's the new path ... \n\n"
 printf $PATH
 printf "\n"
+
+
+# alias zig=""/Users/broaddus/Desktop/software-thirdparty/zig-macos-x86_64-0.10.0-dev.2033+3679d737f/zig"

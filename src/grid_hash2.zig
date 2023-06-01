@@ -1,12 +1,30 @@
 ///  GridHash stores an affine mapping between continuous 2D coords and integer 2D coords used as index
 /// into a storage array.
 /// TODO: How to decide nx,ny,nd based on the distribution of points?
-/// 
-
-
+///
 const std = @import("std");
 const im = @import("image_base.zig");
 const geo = @import("geometry.zig");
+
+const trace = @import("trace");
+
+pub fn log(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    _ = scope;
+    _ = message_level;
+    const logfile = std.fs.cwd().createFile("trace.grid_hash2.csv", .{ .truncate = false }) catch {
+        std.debug.print(format, args);
+        return;
+    };
+    logfile.seekFromEnd(0) catch {};
+    logfile.writer().print(format, args) catch {};
+    logfile.writer().writeByte(std.ascii.control_code.lf) catch {};
+    logfile.close();
+}
 
 const print = std.debug.print;
 const assert = std.debug.assert;
@@ -31,7 +49,8 @@ const V2i32 = @Vector(2, i32);
 const clipi = geo.clipi;
 const floor = std.math.floor;
 
-const test_home = "../test-artifacts/grid_hash2/";
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/grid_hash2/";
+// const test_home = "../test-artifacts/grid_hash2/";
 
 pub const GridHash2 = struct {
     const Self = @This();
@@ -55,9 +74,9 @@ pub const GridHash2 = struct {
         var bbox = geo.boundsBBox(pts); // bbox for pts
 
         bbox.x.lo = @floor(bbox.x.lo);
-        bbox.x.hi = @ceil (bbox.x.hi);
+        bbox.x.hi = @ceil(bbox.x.hi);
         bbox.y.lo = @floor(bbox.y.lo);
-        bbox.y.hi = @ceil (bbox.y.hi);
+        bbox.y.hi = @ceil(bbox.y.hi);
 
         const offset = Vec2{ bbox.x.lo, bbox.y.lo };
         const scale = Vec2{
@@ -79,7 +98,7 @@ pub const GridHash2 = struct {
         };
 
         // actually add points to grid!
-        for (pts) |p,i| try self.setWc(p,@intCast(u32,i));
+        for (pts, 0..) |p, i| try self.setWc(p, @intCast(u32, i));
 
         return self;
     }
@@ -166,15 +185,16 @@ pub const GridHash2 = struct {
         return false;
     }
 
-
-    /// STUB. 
+    /// STUB.
     /// Search neighbouring grid boxes, nearest-first, for k-nearest-neib pts.
     /// If the the radius
     /// of circle to k-1 neib overlaps with neighbouring boxes.
-    /// We do circle-box intersection test to determine which grid boxes 
+    /// We do circle-box intersection test to determine which grid boxes
     /// need searching.
-    pub fn getKnnWc(self: Self, pt: Vec2, k: u8) []?Elem {}
-
+    // pub fn getKnnWc(self: Self, pt: Vec2, k: u8) []?Elem {
+    //     _ = k;
+    //     _ = pt;
+    // }
 
     // Deprecated
     // Add circle label to every box if box centroid is inside circle
@@ -263,10 +283,10 @@ fn vec2Pix(v: Vec2) V2u32 {
     };
 }
 
-fn multiindex(al:std.mem.Allocator, comptime T: type, arr:[]T, index:[]?u32) ![]?T {
-    var new = try al.alloc(?T,index.len);
-    for (index) |idx,i| {
-        if (idx==null) {
+fn multiindex(al: std.mem.Allocator, comptime T: type, arr: []T, index: []?u32) ![]?T {
+    var new = try al.alloc(?T, index.len);
+    for (index, 0..) |idx, i| {
+        if (idx == null) {
             new[i] = null;
             continue;
         }
@@ -297,13 +317,19 @@ test "test GridHash2 deterministic" {
     const sl01 = gh.getPc(.{ 0, 1 });
     const sl11 = gh.getPc(.{ 1, 1 });
 
-    print("sl00 = {d:0.3}\n", .{try multiindex(al,Vec2,&pts,sl00)});
-    print("sl10 = {d:0.3}\n", .{try multiindex(al,Vec2,&pts,sl10)});
-    print("sl01 = {d:0.3}\n", .{try multiindex(al,Vec2,&pts,sl01)});
-    print("sl11 = {d:0.3}\n", .{try multiindex(al,Vec2,&pts,sl11)});
+    // print("sl00 = {?d:0.3}\n", .{try multiindex(al, Vec2, &pts, sl00)});
+    // print("sl10 = {?d:0.3}\n", .{try multiindex(al, Vec2, &pts, sl10)});
+    // print("sl01 = {?d:0.3}\n", .{try multiindex(al, Vec2, &pts, sl01)});
+    // print("sl11 = {?d:0.3}\n", .{try multiindex(al, Vec2, &pts, sl11)});
+    print("\nsl00 = {any}\n", .{try multiindex(al, Vec2, &pts, sl00)});
+    // for () |v| print(" {d:03d}", .{v.?});
+    print("\nsl01 = {any}\n", .{try multiindex(al, Vec2, &pts, sl01)});
+    // for () |v| print(" {d:03d}", .{v.?});
+    print("\nsl10 = {any}\n", .{try multiindex(al, Vec2, &pts, sl10)});
+    // for () |v| print(" {d:03d}", .{v.?});
+    print("\nsl11 = {any}\n", .{try multiindex(al, Vec2, &pts, sl11)});
+    // for () |v| print(" {d:03d}", .{v.?});
 }
-
-
 
 // pub fn main() !void {
 test "test GridHash2" {
@@ -312,7 +338,7 @@ test "test GridHash2" {
     // raw data
     // var pts = [_]Vec2{ .{ 0, 0 }, .{ 1.5, 1.5 }, .{ 2.5, 3 }, .{ 3, 2.5 }, .{ 7, 7 } };
     var pts: [100]Vec2 = undefined;
-    for (pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
+    for (&pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
 
     var grid_hash = try GridHash2.init(allocator, pts[0..], 140, 140, 2);
     defer grid_hash.deinit();
@@ -339,7 +365,63 @@ test "test GridHash2" {
     while (idx < picture.nx * picture.ny) : (idx += 1) {
         const gelems = grid_hash.grid[idx * grid_hash.nd .. (idx + 1) * grid_hash.nd];
         const gel = if (gelems[0]) |g| g else continue;
-        picture.img[idx] = .{ @intCast(u8,gel%255), 0, @intCast(u8,gel%255), 255 };
+        picture.img[idx] = .{ @intCast(u8, gel % 255), 0, @intCast(u8, gel % 255), 255 };
     }
     try im.saveRGBA(picture, test_home ++ "trialpicture.tga");
+}
+
+// pub const GridHash_Balanced = struct {
+// };
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const al = gpa.allocator();
+    try init_gridhash_basic(al);
+}
+
+// The most basic kind of grid hash. Evenly spaced (anisotropic) grid lines.
+// We don't know how large to mak each sector in advance. Just use a
+fn init_gridhash_basic(al: std.mem.Allocator) !void {
+    var pts: [100]Vec2 = undefined;
+    for (&pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
+
+    // make a grid with 100x100 dimensions that match with min and max grid points
+    // const mima = im.minmax(Vec2, &pts);
+
+    _ = al;
+
+    //
+}
+
+// The balanced gridhash determines a set of grid lines that divide points up
+// evenly into bins of differing size.
+fn init_gridhash_balanced(al: std.mem.Allocator, pts: []Vec2) !void {
+    _ = al;
+
+    // Sort pts along one dimension
+    // comptime lessThan: fn(context:@TypeOf(context), lhs:T, rhs:T)bool
+
+    const dim = 0;
+    std.sort.sort(Vec2, pts, dim, lessThanDim);
+    const N = pts.len;
+
+    _ = N;
+}
+
+test "init_gridhash_balanced" {
+    var pts: [100]Vec2 = undefined;
+    for (&pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
+    const al = std.testing.allocator;
+    // const gh = try init_gridhash_balanced(al, pts);
+    const gh = try init_gridhash_basic(al);
+    _ = gh;
+    const p_query = Vec2{ 10, 10 };
+    _ = p_query;
+    // const p2 = gh.nearestNeib(p_query);
+    // print("{any} \n", .{ .p2 = p2 });
+}
+
+fn lessThanDim(context_idx: u8, lhs: Vec2, rhs: Vec2) bool {
+    if (lhs[context_idx] < rhs[context_idx]) return true;
+    return false;
 }

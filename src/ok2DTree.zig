@@ -20,18 +20,14 @@
 /// splits alternate between vertical and horizontal ? or do we always split both ways?
 /// compute point for each tri, e.g. midpoint.
 ///
-///
-///
-///
-
 const std = @import("std");
-const geo = @import("geometry.zig");
+// const geo = @import("geometry.zig");
 
 const print = std.debug.print;
 
 const Allocator = std.mem.Allocator;
-const Vec2 = geo.Vec2;
-const Tri = @import("delaunay.zig").Tri;
+// const Vec2 = geo.Vec2;
+// const Tri = @import("delaunay.zig").Tri;
 
 var allocator = std.testing.allocator;
 var prng = std.rand.DefaultPrng.init(0);
@@ -62,6 +58,23 @@ fn ltPtsDims(
         .X => return lhs[0] < rhs[0],
         .Y => return lhs[1] < rhs[1],
     }
+}
+
+fn ltPtX(_: anytype, lhs: Pt, rhs: Pt) bool {
+    return lhs[0] < rhs[0];
+}
+fn ltPtY(_: anytype, lhs: Pt, rhs: Pt) bool {
+    return lhs[1] < rhs[1];
+}
+
+/// Some better ideas. Don't recurse. Just alloc some memory for indices and
+/// have a scheme
+fn buildTreeNoRecurse(a: Allocator, pts: []Pt) Allocator.Error!void {
+    _ = a;
+    const xsorted = std.sort.sort(Pt, pts, 0, ltPtX);
+    _ = xsorted;
+    const ysorted = std.sort.sort(Pt, pts, 0, ltPtY);
+    _ = ysorted;
 }
 
 fn buildTree(a: Allocator, pts: []Pt, dim: XY) Allocator.Error!*KDNode {

@@ -7,10 +7,11 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
-// pub var allocator = std.testing.allocator;
 
+// pub var allocator = std.testing.allocator;
 // const root = @import("root");
 // const test_artifacts = @import("root").thisDir() ++ "test-artifacts/";
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/image_base/";
 
 test {
     std.testing.refAllDecls(@This());
@@ -87,6 +88,8 @@ pub inline fn inbounds(img: anytype, px: anytype) bool {
     if (0 <= px[0] and px[0] < img.nx and 0 <= px[1] and px[1] < img.ny) return true else return false;
 }
 
+// pub fn minmaxArray()
+
 pub fn minmax(
     comptime T: type,
     arr: []T,
@@ -130,10 +133,10 @@ pub fn saveF32AsTGAGreyNormed(
 ) !void {
     const rgba = try allocator.alloc(u8, 4 * data.len);
     defer allocator.free(rgba);
-    // for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,data[i / 4]),0,255);
+    // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,data[i / 4]),0,255);
     const mnmx = minmax(f32, data);
     normAffineNoErr(data, mnmx[0], mnmx[1]);
-    for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, data[i / 4] * 255); // get negative value?
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, data[i / 4] * 255); // get negative value?
     try saveU8AsTGA(rgba, h, w, name);
 }
 
@@ -142,65 +145,72 @@ pub fn saveF32AsTGAGreyNormedCam(
     cam: anytype,
     name: []const u8,
 ) !void {
-    const rgba = try allocator.alloc(u8, 4 * cam.screen.len);
+    var rgba = try allocator.alloc(u8, 4 * cam.screen.len);
     defer allocator.free(rgba);
-    // for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,cam[i / 4]),0,255);
+    // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,cam[i / 4]),0,255);
     const mnmx = minmax(f32, cam.screen);
     normAffineNoErr(cam.screen, mnmx[0], mnmx[1]);
-    for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, cam.screen[i / 4] * 255); // get negative value?
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, cam.screen[i / 4] * 255); // get negative value?
     try saveU8AsTGA(rgba, @intCast(u16, cam.nyPixels), @intCast(u16, cam.nxPixels), name);
 }
 
 /// deprecated
 pub fn saveF32Img2D(img: Img2D(f32), name: []const u8) !void {
-    const rgba = try allocator.alloc(u8, 4 * img.img.len);
+    var rgba = try allocator.alloc(u8, 4 * img.img.len);
     defer allocator.free(rgba);
-    // for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,img.img[i / 4]),0,255);
+    // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,img.img[i / 4]),0,255);
     const mnmx = minmax(f32, img.img);
     normAffineNoErr(img.img, mnmx[0], mnmx[1]);
-    for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, img.img[i / 4] * 255); // get negative value?
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, img.img[i / 4] * 255); // get negative value?
     try saveU8AsTGA(rgba, @intCast(u16, img.ny), @intCast(u16, img.nx), name);
 }
 
 /// deprecated
 pub fn saveU8AsTGAGrey(data: []u8, h: u16, w: u16, name: []const u8) !void {
-    const rgba = try allocator.alloc(u8, 4 * data.len);
+    var rgba = try allocator.alloc(u8, 4 * data.len);
     defer allocator.free(rgba);
-    for (rgba) |*v, i| v.* = if (i % 4 == 3) 255 else data[i / 4];
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else data[i / 4];
     try saveU8AsTGA(rgba, h, w, name);
 }
 
 pub fn saveU8AsTGA(data: []u8, h: u16, w: u16, name: []const u8) !void {
 
-    // determine if absolute path or relative path. ensure there is a filename with ".tga"
-    // remove file if already exists
-    // make path if it doesn't exist
+    // // determine if absolute path or relative path. ensure there is a filename with ".tga"
+    // //
+    // // remove file if already exists
+    // // make path if it doesn't exist
 
-    const cwd = std.fs.cwd();
+    // const cwd = std.fs.cwd();
     const resolved = try std.fs.path.resolve(allocator, &.{name});
     defer allocator.free(resolved);
-    const dirname = std.fs.path.dirname(resolved);
+    // const dirname = std.fs.path.dirname(resolved);
 
-    // const basename = std.fs.path.basename(resolved);
-    // print("resolved : {s} \n" , .{resolved});
-    // print("dirname : {s} \n" , .{dirname});
-    // print("basename : {s} \n" , .{basename});
+    // // const basename = std.fs.path.basename(resolved);
+    // // print("resolved : {s} \n" , .{resolved});
+    // // print("dirname : {s} \n" , .{dirname});
+    // // print("basename : {s} \n" , .{basename});
 
-    cwd.makePath(dirname.?) catch {};
-    // cwd.createFile(sub_path: []const u8, flags: File.CreateFlags)
+    // cwd.makePath(dirname.?) catch {};
+    // // cwd.createFile(sub_path: []const u8, flags: File.CreateFlags)
 
-    // try std.fs.makeDirAbsolute(dirname.?);
-    // const dirnameDir = try std.fs.openDirAbsolute(dirname.?, .{});
-    // try dirnameDir.makePath("");
+    // // try std.fs.makeDirAbsolute(dirname.?);
+    // // const dirnameDir = try std.fs.openDirAbsolute(dirname.?, .{});
+    // // try dirnameDir.makePath("");
 
-    // WARNING fails when `resolved` is an existing directory...
-    // std.fs.deleteDirAbsolute(resolved) catch {};
-    std.fs.deleteFileAbsolute(resolved) catch {};
-    var out = std.fs.createFileAbsolute(resolved, .{ .exclusive = true }) catch unreachable;
-    defer out.close();
-    // errdefer cwd.deleteFile(name) catch {};
+    // // WARNING fails when `resolved` is an existing directory...
+    // // std.fs.deleteDirAbsolute(resolved) catch {};
+    // std.fs.deleteFileAbsolute(resolved) catch {};
+    // var out = std.fs.createFileAbsolute(resolved, .{ .exclusive = true }) catch unreachable;
+    // defer out.close();
+    // // errdefer cwd.deleteFile(name) catch {};
 
-    var writer = out.writer();
+    // var outfile = try std.fs.cwd().createFile(name, .{});
+    // var outfile = try std.fs.createFileAbsolute(absolute_path: []const u8, flags: File.CreateFlags)
+    errdefer print("We've errored. Boo Hoo. The resolved = {s} \n\n", .{resolved});
+
+    var outfile = try std.fs.createFileAbsolute(resolved, .{});
+    defer outfile.close();
+    var writer = outfile.writer();
 
     try writer.writeAll(&[_]u8{
         0, // ID length
@@ -302,7 +312,7 @@ test "test imageBase. draw a simple yellow line" {
     const pic = try Img2D([4]u8).init(600, 400);
     defer pic.deinit();
     drawLine([4]u8, pic, 10, 0, 500, 100, .{ 0, 255, 255, 255 });
-    try saveRGBA(pic, "../test-artifacts/testeroo.tga");
+    try saveRGBA(pic, test_home ++ "testeroo.tga");
 }
 
 pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, r: i32, val: T) void {
@@ -370,4 +380,55 @@ pub fn drawCircleOutline(pic: Img2D([4]u8), xm: i32, ym: i32, _r: i32, val: [4]u
             err += x * 2 + 1; //  /* -> x-step now */
         } //  /* e_xy+e_x > 0 or no 2nd y-step */
     }
+}
+
+test "imageBase. saveU8AsTGAGrey" {
+    print("\n", .{});
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // var grey = .{0}**(2^10);
+    var grey = std.mem.zeroes([1 << 10]u8);
+    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    print("\n number ;;; {} \n", .{1 << 5});
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 5, test_home ++ "correct.tga");
+    print("\n", .{});
+}
+
+test "imageBase. saveU8AsTGAGrey (h & w too small)" {
+    print("\n", .{});
+    // var grey = .{0}**(2^10);
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var grey = std.mem.zeroes([1 << 10]u8);
+    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    print("\n number ;;; {} \n", .{1 << 6});
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 4, test_home ++ "height_width_too_small.tga");
+    print("\n", .{});
+}
+
+test "imageBase. saveU8AsTGAGrey (h & w too big)" {
+    print("\n", .{});
+    // var grey = .{0}**(2^10);
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var grey = std.mem.zeroes([1 << 10]u8);
+    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    print("\n number ;;; {} \n", .{1 << 6});
+    try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 6, test_home ++ "height_width_too_big.tga");
+    print("\n", .{});
+}
+
+test "imageBase. saveU8AsTGA" {
+    print("\n", .{});
+    var rgba = std.mem.zeroes([(1 << 10) * 4]u8);
+    for (&rgba, 0..) |*v, i| v.* = bl: {
+        const x = switch (i % 4) {
+            0 => i % 255, // red
+            1 => (2 * i) % 255, // blue
+            2 => (3 * i) % 255, // green
+            3 => 255, // alpha
+            else => unreachable,
+        };
+        break :bl @intCast(u8, x);
+    };
+    // const x = @intCast(u8, i % 256); // alpha channel changes too!
+    try saveU8AsTGA(&rgba, 1 << 5, 1 << 5, test_home ++ "multicolor.tga");
+    print("\n", .{});
 }

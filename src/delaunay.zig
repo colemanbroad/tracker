@@ -13,6 +13,8 @@ const BBox = g.BBox;
 
 // const root = @import("root");
 // const test_artifacts = @import("root").thisDir() ++ "test-artifacts/";
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/track/";
+
 // const build_options = @import("build_options");
 // build_options.
 
@@ -84,7 +86,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
     // Copy _pts to pts. Add space for new bounding tri.
     var pts = try allo.alloc(Pt, _pts.len + 3);
     defer allo.free(pts);
-    for (_pts) |p, i| pts[i] = p;
+    for (_pts, 0..) |p, i| pts[i] = p;
 
     // Add points that form a triangle around the bounding box.
     const bbox = g.boundsBBox(_pts);
@@ -143,7 +145,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
 
     // MAIN LOOP OVER (nonboundary) POINTS
 
-    for (pts[0 .. pts.len - 3]) |p, idx_pt| {
+    for (pts[0 .. pts.len - 3], 0..) |p, idx_pt| {
         // const loop_tracy_zone = ztracy.ZoneNC(@src(), "loop", 0x00_ff_00_00);
         // defer loop_tracy_zone.End(); // ztracy
 
@@ -281,7 +283,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         // count the number of occurrences of each edge in bad triangles. unique edges occur once.
         for (bad_triangles.items) |_tri| {
             const tri = Mesh2D.sortTri(_tri);
-            for (tri) |_, i| {
+            for (tri, 0..) |_, i| {
                 const edge = Mesh2D.sortEdge(Edge{ tri[i], tri[(i + 1) % 3] });
                 const gop_res = try edge_label.getOrPut(edge);
                 if (gop_res.found_existing) {
@@ -553,7 +555,7 @@ pub const GridHash2 = struct {
     pub fn doubleSizeND(self: *Self) !void {
         const new_grid = try self.a.alloc(?Elem, self.grid.len * 2);
         for (new_grid) |*v| v.* = null;
-        for (self.grid) |v, i| new_grid[2 * i] = v;
+        for (self.grid, 0..) |v, i| new_grid[2 * i] = v;
         self.a.free(self.grid);
         self.grid = new_grid;
         self.nd = 2 * self.nd;
@@ -1036,7 +1038,7 @@ pub const Mesh2D = struct {
     pub fn addPointInPolygon(self: *Self, pt_idx: PtIdx, polygon: []PtIdx) !void {
         var tri_list = try self.al.alloc(Tri, polygon.len);
         defer self.al.free(tri_list);
-        for (polygon) |_, i| {
+        for (polygon, 0..) |_, i| {
             const edge = Edge{ polygon[i], polygon[(i + 1) % polygon.len] };
             tri_list[i] = sortTri(Tri{ edge[0], edge[1], pt_idx });
         }
@@ -1376,13 +1378,13 @@ test "test rasterize()" {
     defer the_mesh.deinit();
 
     the_mesh.show();
-    try the_mesh.rasterize("../test-artifacts/mesh0.tga");
+    try the_mesh.rasterize(test_home ++ "mesh0.tga");
 
     const tris = try the_mesh.validTris(a);
     defer a.free(tris);
 
     the_mesh.removeTri(tris[0]);
-    try the_mesh.rasterize("../test-artifacts/mesh1.tga");
+    try the_mesh.rasterize(test_home ++ "mesh1.tga");
     the_mesh.show();
 
     const center_point = (the_mesh.vs.items[tris[1][0]] + the_mesh.vs.items[tris[1][1]] + the_mesh.vs.items[tris[1][2]]) / Pt{ 3.0, 3.0 };
@@ -1391,5 +1393,5 @@ test "test rasterize()" {
     _ = try the_mesh.addTri(tris[1]);
     // try the_mesh.addPointInPolygon(center_point, &tris[1]);
     the_mesh.show();
-    try the_mesh.rasterize("../test-artifacts/mesh2.tga");
+    try the_mesh.rasterize(test_home ++ "mesh2.tga");
 }

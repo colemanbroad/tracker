@@ -1,6 +1,6 @@
 /// Defines Mesh3D type. Contains vertices in R3, Edges and (triangular) Faces.
 /// Defines simple drawing functions on this mesh type.
-/// 
+///
 ///
 ///
 ///
@@ -20,10 +20,10 @@ const Img2D = im.Img2D;
 const Vec2 = geo.Vec2;
 const Vec3 = geo.Vec3;
 
-const sphereTrajectory = geo.sphereTrajectory;
-const bounds3 = geo.bounds3;
-const vec2 = geo.vec2;
-const abs = geo.abs;
+// const sphereTrajectory = geo.sphereTrajectory;
+// const bounds3 = geo.bounds3;
+// const vec2 = geo.vec2;
+const l2norm = geo.l2norm;
 const uvec2 = geo.uvec2;
 
 const min3 = std.math.min3;
@@ -34,7 +34,7 @@ const assert = std.debug.assert;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/drawing/";
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/mesh/";
 
 test {
     std.testing.refAllDecls(@This());
@@ -51,7 +51,7 @@ pub fn idxsortFn(zvals: []f32, lhs: u32, rhs: u32) bool {
 // faces are composed of 4 vertices
 pub const Mesh3D = struct {
     const This = @This();
-    
+
     vs: []Vec3,
     es: [][2]u32,
     fs: ?[][4]u32,
@@ -73,7 +73,7 @@ fn faceZOrder(vertices: []Vec3, faces: [][4]u32) ![]u32 {
     const indices = try allocator.alloc(u32, faces.len);
     // defer allocator.free(indices);
 
-    for (faces) |f, i| {
+    for (faces, 0..) |f, i| {
         const zval = (vertices[f[0]][0] + vertices[f[1]][0] + vertices[f[2]][0] + vertices[f[3]][0]) * 0.25; //Vec3{0.25,0.25,0.25};
         zpos[i] = zval;
         indices[i] = @intCast(u32, i);
@@ -84,8 +84,6 @@ fn faceZOrder(vertices: []Vec3, faces: [][4]u32) ![]u32 {
     // print("inds[..10]={d}\n",.{indices[0..10].*});
     return indices;
 }
-
-
 
 pub fn myabs(a: anytype) @TypeOf(a) {
     if (a < 0) return -a else return a;
@@ -200,7 +198,7 @@ fn renderFilledTri(_img: Img2D(f32), _tri: [3][2]u32) void {
 
     // sort out left and right side of base
     var left = b;
-    var right = vec2(.{ @floor(xmid), b[1] });
+    var right = Vec2{ @floor(xmid), b[1] };
     if (left[0] == right[0]) return; // TODO FIXME
 
     // print("all the triangles...\n" , .{});
@@ -303,7 +301,6 @@ pub fn fillFlatBaseTri(_img: Img2D(f32), a: Vec2, left: Vec2, right: Vec2) void 
 
 var F32COLOR: f32 = 1.0;
 
-
 // Generate a rectangular grid polygon
 pub fn gridMesh(nx: u32, ny: u32) !Mesh3D {
     var vs = try allocator.alloc(Vec3, nx * ny);
@@ -315,7 +312,7 @@ pub fn gridMesh(nx: u32, ny: u32) !Mesh3D {
     var nes: u32 = 0; // n edges
     var nfs: u32 = 0; // n faces
 
-    for (vs) |_, i| {
+    for (vs, 0..) |_, i| {
         const k = @intCast(u32, i);
         // coords
         const x = i % nx;
@@ -416,7 +413,7 @@ pub fn chaikinPeriodic(pts0: []Vec3) ![]Vec3 {
 
     var pts = try allocator.alloc(Vec3, npts * (1 << nsubdiv) * 2); // holds all subdiv levels. NOTE: 1 + 1/2 + 1/4 + 1/8 ... = 2
     defer allocator.free(pts);
-    for (pts0) |p, k| pts[k] = p;
+    for (pts0, 0..) |p, k| pts[k] = p;
 
     var idx_start: u32 = 0; // npts * (1<<i - 1);
     var idx_dx: u32 = npts;
@@ -461,7 +458,7 @@ pub fn chaikinPeriodic(pts0: []Vec3) ![]Vec3 {
     }
 
     var ret = try allocator.alloc(@TypeOf(pts[0]), idx_end - idx_start);
-    for (ret) |*v, i| v.* = pts[idx_start + i];
+    for (ret, 0..) |*v, i| v.* = pts[idx_start + i];
 
     return ret;
     // return pts[idx_start..idx_end];
@@ -501,10 +498,10 @@ pub fn subdivideCurve(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
     // var faces = try allocator.alloc([4]u32,nfs*100);
 
     // init
-    for (surf.vs) |v, i| {
+    for (surf.vs, 0..) |v, i| {
         verts[i] = v;
     }
-    for (surf.es) |v, i| {
+    for (surf.es, 0..) |v, i| {
         edges[i] = v;
     }
     // for (surf.fs) |v,i| {faces[i] = v;}
@@ -516,7 +513,7 @@ pub fn subdivideCurve(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         const oldverts = verts[0..nvs];
 
         // create new edges. exactly 2x number of old edges.
-        for (edges[0..nes]) |e, i| {
+        for (edges[0..nes], 0..) |e, i| {
             const v0 = verts[e[0]];
             const v1 = verts[e[1]];
             const newvert = (v0 + v1) * half;
@@ -531,7 +528,7 @@ pub fn subdivideCurve(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         const na = try VertexNeibArray(3).init(newedges[0..nes], nvs);
 
         // update position of all old vertices.
-        for (oldverts) |*v, i| {
+        for (oldverts, 0..) |*v, i| {
             const nn = na.count[i];
             const ns = na.neibs[i];
             if (nn > 1) { // don't update positions of vertices with only 1 neib (or zero)
@@ -550,8 +547,8 @@ pub fn subdivideCurve(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         edges = _tmp;
     }
 
-    verts = allocator.shrink(verts, nvs);
-    edges = allocator.shrink(edges, nes);
+    _ = allocator.resize(verts, nvs);
+    _ = allocator.resize(edges, nes);
 
     // return Mesh{.vs=verts[0..nvs] , .es=edges[0..nes] , .fs=null};
     return Mesh3D{ .vs = verts, .es = edges, .fs = null };
@@ -625,15 +622,15 @@ pub fn subdivideMesh(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
     defer allocator.free(newfaces);
 
     // init
-    for (surf.vs) |v, i| {
+    for (surf.vs, 0..) |v, i| {
         verts[i] = v;
         n_verts += 1;
     }
-    for (surf.es) |v, i| {
+    for (surf.es, 0..) |v, i| {
         oldedges[i] = v;
         n_oldedges += 1;
     }
-    for (surf.fs.?) |v, i| {
+    for (surf.fs.?, 0..) |v, i| {
         oldfaces[i] = v;
         n_oldfaces += 1;
     }
@@ -678,7 +675,7 @@ pub fn subdivideMesh(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         // exactly 4x number of oldfaces after each round.
         // ASSUMES QUAD FACES!
 
-        for (oldfaces[0..n_oldfaces]) |f, i| {
+        for (oldfaces[0..n_oldfaces], 0..) |f, i| {
             const v0 = verts[f[0]];
             const v1 = verts[f[1]];
             const v2 = verts[f[2]];
@@ -721,7 +718,7 @@ pub fn subdivideMesh(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         defer na.deinit();
 
         // update position of all old vertices.
-        for (verts[0..n_oldverts]) |*v, i| {
+        for (verts[0..n_oldverts], 0..) |*v, i| {
             const nn = na.count[i];
             const ns = na.neibs[i];
             if (nn > 1) { // don't update positions of vertices with only 1 neib (or zero)
@@ -758,9 +755,9 @@ pub fn subdivideMesh(surf: Mesh3D, nsubdiv: u32) !Mesh3D {
         n_newfaces = 0;
     }
 
-    verts = allocator.shrink(verts, n_verts);
-    oldedges = allocator.shrink(oldedges, n_oldedges);
-    oldfaces = allocator.shrink(oldfaces, n_oldfaces);
+    _ = allocator.resize(verts, n_verts);
+    _ = allocator.resize(oldedges, n_oldedges);
+    _ = allocator.resize(oldfaces, n_oldfaces);
 
     // return Mesh{.vs=verts[0..n_verts] , .es=oldedges[0..n_oldedges] , .fs=oldfaces[0..n_oldfaces]};
     return Mesh3D{ .vs = verts, .es = oldedges, .fs = oldfaces };
@@ -808,7 +805,7 @@ test "geometry. mesh. VertexNeibArray on BoxPoly" {
     const surf = Mesh3D{ .vs = box.vs[0..], .es = box.es[0..], .fs = box.fs[0..] };
     const nl = try VertexNeibArray(3).init(surf.es, surf.vs.len);
     defer nl.deinit();
-    print("\n{d}\n", .{nl});
+    print("\n{any}\n", .{nl});
 }
 
 // index -> [n]index map. Maps edges to their faces and faces to their edges.
@@ -830,12 +827,12 @@ pub fn Face2Edge(comptime nneibs: u8) type {
 
             var map = std.AutoHashMap([2]u32, u32).init(allocator);
             defer map.deinit();
-            for (es) |e, i| {
+            for (es, 0..) |e, i| {
                 try map.put(e, @intCast(u32, i));
                 try map.put(.{ e[1], e[0] }, @intCast(u32, i));
             } // Add fwd and backward edges to map. ASSUME: Edges are undirected.
-            for (fs) |f, i| {
-                for (f[0 .. f.len - 1]) |_, j| { // iterate over all verts but last. ASSUME: faces are closed polygons (embedded in 3D).
+            for (fs, 0..) |f, i| {
+                for (f[0 .. f.len - 1], 0..) |_, j| { // iterate over all verts but last. ASSUME: faces are closed polygons (embedded in 3D).
                     face2edge[i][j] = map.get(.{ f[j], f[j + 1] }).?;
                 }
                 face2edge[i][f.len - 1] = map.get(.{ f[f.len - 1], f[0] }).?; // attatch last vertex to first
@@ -856,5 +853,5 @@ test "geometry. mesh. Face2Edge on BoxPoly" {
     const surf = Mesh3D{ .vs = box.vs[0..], .es = box.es[0..], .fs = box.fs[0..] };
     const e2f = try Face2Edge(4).init(surf.es, surf.fs.?);
     defer e2f.deinit();
-    print("\n{d}\n", .{e2f});
+    print("\n{any}\n", .{e2f});
 }

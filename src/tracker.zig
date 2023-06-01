@@ -30,7 +30,7 @@ pub fn log(
 ) void {
     _ = scope;
     _ = message_level;
-    const logfile = std.fs.cwd().createFile("timing.csv", .{ .truncate = false }) catch {
+    const logfile = std.fs.cwd().createFile("trace.tracker.csv", .{ .truncate = false }) catch {
         std.debug.print(format, args);
         return;
     };
@@ -44,12 +44,13 @@ pub fn log(
 // https://github.com/ziglang/zig/issues/4335
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
+var allocator = gpa.allocator();
 // var allocator = std.testing.allocator; //(.{}){};
+
 const Pts3 = [3]f32;
 const Pts = geo.Vec2;
 
-const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/track/";
+const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/track/";
 test {
     std.testing.refAllDecls(@This());
 }
@@ -76,9 +77,9 @@ test "test strain tracking" {
     const nb = 101;
 
     var va: [na]Pts = undefined;
-    for (va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+    for (&va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
     var vb: [nb]Pts = undefined;
-    for (vb) |*v, i| v.* = .{ va[i][0] + random.float(f32) * 0.5 + 1, va[i][1] + random.float(f32) * 0.5 };
+    for (&vb, 0..) |*v, i| v.* = .{ va[i][0] + random.float(f32) * 0.5 + 1, va[i][1] + random.float(f32) * 0.5 };
 
     // try mkdirIgnoreExists("strain");
 
@@ -87,7 +88,7 @@ test "test strain tracking" {
 
     var res: [nb]i32 = undefined;
 
-    for (b2a) |a_idx, i| {
+    for (b2a, 0..) |a_idx, i| {
         if (a_idx) |id| {
             res[i] = @intCast(i32, id);
         } else {
@@ -111,15 +112,15 @@ export fn strain_track2d(va: [*]f32, na: u32, vb: [*]f32, nb: u32, res: [*]i32) 
     defer span.close(); // Span is closed automatically when the function returns
 
     const va_ = allocator.alloc(Pts, na) catch return -1;
-    for (va_) |*v, i| v.* = Pts{ va[2 * i], va[2 * i + 1] };
+    for (va_, 0..) |*v, i| v.* = Pts{ va[2 * i], va[2 * i + 1] };
     const vb_ = allocator.alloc(Pts, nb) catch return -1;
-    for (vb_) |*v, i| v.* = Pts{ vb[2 * i], vb[2 * i + 1] };
+    for (vb_, 0..) |*v, i| v.* = Pts{ vb[2 * i], vb[2 * i + 1] };
 
     const b2a = strainTrack(va_, vb_) catch return -1;
     defer allocator.free(b2a);
 
     // Write the result to RES in-place
-    for (b2a) |a_idx, i| {
+    for (b2a, 0..) |a_idx, i| {
         if (a_idx) |id| {
             res[i] = @intCast(i32, id);
         } else {
@@ -161,6 +162,7 @@ fn waitForUserInput() !i64 {
     return 1;
 }
 
+// Track from va -> vb using velocity gradient tracking.
 pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
 
     // const stdin = std.io.getStdIn();
@@ -256,11 +258,11 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
         // for (triangles) |tri| {
         while (it.next()) |kv| {
             const tri = kv.key_ptr.*;
-            for (tri) |v, i| {
+            for (tri, 0..) |v, i| {
                 outer: for ([3]u32{ 0, 1, 2 }) |j| {
                     if (i == j) continue;
                     const v_neib = tri[j];
-                    for (delaunay_array[v]) |v_neib_existing, k| {
+                    for (delaunay_array[v], 0..) |v_neib_existing, k| {
                         if (v_neib_existing == null) {
                             delaunay_array[v][k] = v_neib;
                             nn_distance_ditribution[v][k] = dist(Pts, va[v], va[v_neib]); // squared euclidean
@@ -319,7 +321,7 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
         var bestidx: ?usize = null;
 
         // TODO: replace linear lookup with O(1) GridHash
-        for (vb) |x_vb, vb_idx| {
+        for (vb, 0..) |x_vb, vb_idx| {
 
             // skip vb if already assigned
             if (b_status[vb_idx] == .daughter) continue;
@@ -404,7 +406,7 @@ pub fn strainTrack(va: []Pts, vb: []Pts) ![]?u32 {
 
     print("\n", .{});
     print("Assignment Histogram\n", .{});
-    for (hist) |h, i| {
+    for (hist, 0..) |h, i| {
         const e = @intToEnum(VStatusTag, i);
         print("{s}→{d}\n", .{ @tagName(e), h });
     }
@@ -424,9 +426,9 @@ test "test track. greedy Strain Tracking 2D" {
     const nb = 102;
 
     var va: [na]Pts = undefined;
-    for (va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+    for (&va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
     var vb: [nb]Pts = undefined;
-    for (vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+    for (&vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
 
     const b2a = try strainTrack(va[0..], vb[0..]);
     defer allocator.free(b2a);
@@ -435,7 +437,7 @@ test "test track. greedy Strain Tracking 2D" {
 fn argmax1d(comptime T: type, arr: []T) struct { max: T, idx: usize } {
     var amax = arr[0];
     var idx: usize = 0;
-    for (arr) |v, i| {
+    for (arr, 0..) |v, i| {
         if (v > amax) {
             idx = i;
             amax = v;
@@ -451,9 +453,9 @@ test "test track. greedy min-cost tracking 3D" {
     const nb = 1002;
 
     var va: [na]Pts3 = undefined;
-    for (va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10, random.float(f32) * 10 };
+    for (&va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10, random.float(f32) * 10 };
     var vb: [nb]Pts3 = undefined;
-    for (vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10, random.float(f32) * 10 };
+    for (&vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10, random.float(f32) * 10 };
 
     const parents = try greedyTrack(Pts3, va[0..], vb[0..]);
     defer allocator.free(parents);
@@ -462,13 +464,17 @@ test "test track. greedy min-cost tracking 3D" {
 test "test track. greedy min-cost tracking 2D" {
     print("\n\n", .{});
 
+    // allocator = std.testing.allocator;
+
     const na = 101;
     const nb = 102;
 
     var va: [na]Pts = undefined;
-    for (va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+    for (&va) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
     var vb: [nb]Pts = undefined;
-    for (vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+    for (&vb) |*v| v.* = .{ random.float(f32) * 10, random.float(f32) * 10 };
+
+    // @breakpoint();
 
     const parents = try greedyTrack(Pts, va[0..], vb[0..]);
     defer allocator.free(parents);
@@ -476,14 +482,14 @@ test "test track. greedy min-cost tracking 2D" {
 
 export fn greedy_track2d(va: [*]f32, na: u32, vb: [*]f32, nb: u32, res: [*]i32) i32 {
     const va_ = allocator.alloc(Pts, na) catch return -1;
-    for (va_) |*v, i| v.* = Pts{ va[2 * i], va[2 * i + 1] };
+    for (va_, 0..) |*v, i| v.* = Pts{ va[2 * i], va[2 * i + 1] };
     const vb_ = allocator.alloc(Pts, nb) catch return -1;
-    for (vb_) |*v, i| v.* = Pts{ vb[2 * i], vb[2 * i + 1] };
+    for (vb_, 0..) |*v, i| v.* = Pts{ vb[2 * i], vb[2 * i + 1] };
 
     const parents = greedyTrack(Pts, va_, vb_) catch return -1;
     defer allocator.free(parents);
 
-    for (parents) |p, i| res[i] = p;
+    for (parents, 0..) |p, i| res[i] = p;
 
     return 0;
 }
@@ -514,7 +520,7 @@ pub fn greedyTrack(comptime T: type, va: []T, vb: []T) ![]i32 {
     // sort each row by smallest cost? then
     var edgeQ = PriorityQueue(CostEdgePair, void, ltCostEdgePair).init(allocator, {});
     defer edgeQ.deinit();
-    for (cost) |c, i| {
+    for (cost, 0..) |c, i| {
         const ia = i / nb;
         const ib = i % nb;
         try edgeQ.add(.{ .cost = c, .ia = @intCast(u32, ia), .ib = @intCast(u32, ib) });
@@ -537,8 +543,8 @@ pub fn greedyTrack(comptime T: type, va: []T, vb: []T) ![]i32 {
     }
 
     var parents = try allocator.alloc(i32, nb);
-    for (vb) |_, i| {
-        for (va) |_, j| {
+    for (vb, 0..) |_, i| {
+        for (va, 0..) |_, j| {
             // if the edge is active, then assign and break (can only have 1 parent max)
             if (asgn[j * nb + i] == 1) {
                 parents[i] = @intCast(i32, j);
@@ -549,7 +555,7 @@ pub fn greedyTrack(comptime T: type, va: []T, vb: []T) ![]i32 {
         }
     }
 
-    for (parents) |p, i| {
+    for (parents, 0..) |p, i| {
         print("{d} → {d}\n", .{ i, p });
         if (i > 10) break;
     }
@@ -571,8 +577,8 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []T, b: []T) ![]f32
     var cost = try al.alloc(f32, na * nb);
     for (cost) |*v| v.* = 0;
 
-    for (a) |x, i| {
-        for (b) |y, j| {
+    for (a, 0..) |x, i| {
+        for (b, 0..) |y, j| {
             cost[i * nb + j] = dist(T, x, y);
         }
     }

@@ -62,13 +62,13 @@ exe.linkSystemLibraryName("curl");
 
 
 
-## Very Fast StrainCost Tracking
+# Very Fast StrainCost Tracking
 
-## Rasterizing continuous shapes
+# Rasterizing continuous shapes
 
 I could do everything my self in my own little rendered and try to get everything pixel perfect. Or I could try to use an SVG library. Or TinyVG.
 
-## equality testing
+# equality testing
 
 to know if two slices of Tri's contain the same set of Tris we can
 1. put each tri into hashmap-a and hashmap-b
@@ -82,26 +82,24 @@ We could do this by sorting at Tri-creation-time.
 Or would we rather enforce canonical form only when inserting into a hashmap?
 Can we sub-class AutoHashMap and override the `put` and `get` methods ?
 
-## logging and debugging
+# logging and debugging
 
 each module should have separate log destination ? and an extra that's unified?
 
 
-## fast spatial nn data struct. grid hash.
+# fast spatial nn data struct. grid hash.
 
 Sep 22 2022
 - `tri_trid.zig`, `grid_hash2.zig`, `grid_hash.zig` cleanup
 - `drawing.zig`, `draw_mesh.zig`, `drawing_basic.zig` cleanup
 - `drawing` vs `rasterize` ?
 - `cam3d` vs `render3d` ?
-- ~~test~~
 
 
 The API I WANT is ...
 
 ```go
 
-# abcdef 
 const edges:[][2]u32 = undefined
 const gr = topology.Graph().fromEdgeList(edges)
 
@@ -111,13 +109,41 @@ if (gr.isRegular()) {}
 
 
 const kd = euclidean.dim2.KDTree()
-const p1 = kd.n_neib(p0)
+const p1 = kd.nearest_neib(p0)
 const p_list = kd.neibs(p0,10)
 const dx = euclidean.dist(p0,p1)
 
 const gh = euclidean.dim3.GridHash()
 
+```
+
+
+# Balanced Grid Hash
+
+May 30 2023
+
+The gridhash is a great idea that makes it easy to find nearest neibs. But we don't know the optimal grid density ahead of time, so we have to guess or learn from the data, or determine it on the fly. I think we'll know the total number of points and the image shape ahead of time, so that allows us to compute an average density, which allows us to compute a bin size given an expected number of objects per bin. The number of objects won't change over the lifetime of this datastructure, which is also very useful. Alternatively, we can just sort the points by a single coordinate, which still helps with nearest neib search! Double-alternatively we can sort the points by a single coordinate within a grid window, then sort the grid squares into rows by the opposite coordinate, then sort the rows into a full grid by the 1st coordinate again.... This is like a grid hash. 
+
+Within a grid cell we brute force compute distance to every point. 
+
+We could sort the points in a dense array `[N]Pt` by gridcell, then have a `GridCell -> []Pt` function that knows where the points are for a given grid cell. 
+
+We could sort by X, then break X into Nx percentiles where we determine the location of grid spacing by the real data. Then within the n-th percentile we sort by Y instead of X, then do the same thing breaking Y up into dynamically
+spaced grid. Then we have a lookup that maps an arbitrary point (x,y) to first an x index, then a specific y index for that x. This allows us to have roughly the same number of objects in every grid cell by using dynamic spacing! And it's still very fast to build. see diagram.
+
+```python
+
+# query point
+qp = [10.0, 11.2]
+gh = GridHash(pts)
+gh.nearest(qp,k=3)
+# nearest() first maps qp.x to an x-index. Then maps qp.y to a y-index.
+gh.x_lines # [0.0, 1.2, 3.5, 7.0] These lines should include include the domain bounds.
+gh.y_lines[2] # [0.0, 3.4, 8.9, 12.] These lines should also include top/bottom domain bounds.
+
+
 
 ```
+
 
 

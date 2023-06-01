@@ -13,31 +13,31 @@ plt.ion()
 import os
 from glob import glob
 
-homedir = "/Users/broaddus/Desktop/work/zig-tracker/"
+homedir = "/Users/broaddus/Desktop/work/isbi/zig-tracker/"
 
 
 def strain_track(va,vb):
   va = va.astype(np.float32)
   vb = vb.astype(np.float32)
-  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
   parents = np.zeros(len(vb), dtype=np.int32)
-  res_ = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+  va_ptr  = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  vb_ptr  = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  res_ptr = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
   # ipdb.set_trace()
-  err = lib.strain_track2d(va_ , len(va) , vb_ , len(vb) , res_)
-  if (err!=0): print("ERRORRRRRROROR")
+  err = lib.strain_track2d(va_ptr , len(va) , vb_ptr , len(vb) , res_ptr)
+  if (err!=0): print(f"ERRORRRRRROROR = {err}")
   return parents
 
 def greedy_track(va,vb):
   va = va.astype(np.float32)
   vb = vb.astype(np.float32)
-  va_ = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
-  vb_ = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
   parents = np.zeros(len(vb), dtype=np.int32)
-  res_ = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+  va_ptr  = va.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  vb_ptr  = vb.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+  res_ptr = parents.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
   # err = lib.greedy_track2d.restype = ndpointer(dtype=ctypes.c_int32, shape=(len(vb),))
-  err = lib.greedy_track2d(va_,len(va),vb_,len(vb), res_)
-  if (err!=0): print("ERRORRRRRROROR")
+  err = lib.greedy_track2d(va_ptr,len(va),vb_ptr,len(vb), res_ptr)
+  if (err!=0): print(f"ERRORRRRRROROR = {err}")
   return parents
 
 

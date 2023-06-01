@@ -1,4 +1,3 @@
-
 const std = @import("std");
 const im = @import("image_base.zig");
 const geo = @import("geometry.zig");
@@ -32,14 +31,11 @@ pub fn main() !void {
     try test4();
 }
 
-
-
-fn randomFloats(comptime n:u32) [n]f32 {
-    var x:[n]f32 = undefined;
+fn randomFloats(comptime n: u32) [n]f32 {
+    var x: [n]f32 = undefined;
     for (x) |*v| v.* = random.float(f32) * 100.0;
     return x;
 }
-
 
 /// test spatial. bin random points onto 2D grid
 fn test1() !void {
@@ -52,7 +48,7 @@ fn test1() !void {
     const ys = randomFloats(100);
     var grid = try im.Img2D(u8).init(10, 10);
 
-    for (xs) |x, i| {
+    for (xs, 0..) |x, i| {
         const y = ys[i];
         const nx = @floatToInt(usize, x / 10);
         const ny = @floatToInt(usize, y / 10);
@@ -61,7 +57,7 @@ fn test1() !void {
 
     var rgba = try im.Img2D([4]u8).init(10, 10);
 
-    for (grid.img) |g, i| {
+    for (grid.img, 0..) |g, i| {
         const r = @intCast(u8, (@intCast(u16, g) * 10) % 255);
         rgba.img[i] = .{ r, r, r, 255 };
     }
@@ -73,11 +69,13 @@ fn test2() !void {
     var pts: [100]Vec2 = undefined;
     for (pts) |*v| v.* = .{ random.float(f32) * 100.0, random.float(f32) * 100.0 };
 
+    const allocator = std.testing.allocator;
+
     var gh = try GridHash.init(allocator, 10, 10, 6, pts[0..], null);
     defer gh.deinit();
-    for (pts) |p| {
+    for (pts, 0..) |p, i| {
         _ = gh.neibs(p);
-        print("{}→{d}\n",.{i,gh.neibs(p)});
+        print("{}→{d}\n", .{ i, gh.neibs(p) });
     }
 }
 
@@ -122,10 +120,10 @@ const GridHash = struct {
         labels: ?[]u16,
     ) !Self {
         var pts = try allo.alloc(Vec2, _pts.len);
-        for (pts) |*p, i| p.* = _pts[i];
-        const map = try allocator.alloc(Elem, nx * ny * nelemax);
+        for (pts, 0..) |*p, i| p.* = _pts[i];
+        const map = try allo.alloc(Elem, nx * ny * nelemax);
         // print("\n\nmap.len = {}\n",.{map.len});
-        errdefer allocator.free(map);
+        errdefer allo.free(map);
         for (map) |*v| v.* = null;
 
         var bb = geo.boundsBBox(pts);
@@ -140,7 +138,7 @@ const GridHash = struct {
         // const dx = (bb.x.hi-bb.x.lo)/@intToFloat(f32,nx);
         // const dy = (bb.y.hi-bb.y.lo)/@intToFloat(f32,ny);
 
-        outer: for (pts) |p, i| { // i = pt label
+        outer: for (pts, 0..) |p, i| { // i = pt label
 
             const l = if (labels) |lab| lab[i] else i;
 
@@ -298,8 +296,8 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []T, b: []T) ![]f32
     var cost = try al.alloc(f32, na * nb);
     for (cost) |*v| v.* = 0;
 
-    for (a) |x, i| {
-        for (b) |y, j| {
+    for (a, 0..) |x, i| {
+        for (b, 0..) |y, j| {
             cost[i * nb + j] = dist(T, x, y);
         }
     }
@@ -321,6 +319,8 @@ fn test3() !void {
     var pts: [N]Vec2 = undefined;
     for (pts) |*v| v.* = .{ random.float(f32) * 100.0, random.float(f32) * 100.0 };
 
+    const allocator = std.testing.allocator;
+
     const sqrtN = @floatToInt(u16, @sqrt(@intToFloat(f32, N)));
     var gh = try GridHash.init(allocator, sqrtN, sqrtN, 20, pts[0..], null);
     defer gh.deinit();
@@ -336,13 +336,13 @@ fn test3() !void {
     var buf = try allocator.alloc(u16, 200);
     defer allocator.free(buf);
 
-    for (pts) |p, i| {
+    for (pts, 0..) |p, i| {
         try gh.nnRadius(res, p, 1.0);
         var res_view = res.ids[0..res.n_ids.*]; // leave res.ids length const. Change size of view.
 
         const pdneibs = blk: {
             var count: u16 = 0;
-            for (pts) |_, j| {
+            for (pts, 0..) |_, j| {
                 if (pairdist[i * N + j] < 1.0) {
                     buf[count] = @intCast(u16, j);
                     count += 1;
@@ -364,6 +364,7 @@ fn test3() !void {
 // test "test spatial. radius speed test" {
 fn test4() !void {
     var alltimes: [4][6]i128 = undefined;
+    const allocator = std.testing.allocator;
 
     for (alltimes) |*timez| {
         const N = 5_000;
@@ -404,7 +405,7 @@ fn test4() !void {
         for (qpts) |q| {
             _ = blk: {
                 var count: u16 = 0;
-                for (pts) |p, j| {
+                for (pts, 0..) |p, j| {
                     // if (pairdist[i*N + j] < 1.0) {
                     const dx = q - p;
                     const pq_dist = @sqrt(@reduce(.Add, dx * dx));
@@ -426,9 +427,9 @@ fn test4() !void {
     }
 
     print("\nTiming\n", .{});
-    for (alltimes) |_, i| {
+    for (alltimes, 0..) |_, i| {
         print("\n", .{});
-        for (alltimes[0]) |_, j| {
+        for (alltimes[0], 0..) |_, j| {
             const t = @intToFloat(f32, alltimes[i][j]) / 1e6;
             print("{d:.3} ", .{t});
         }
