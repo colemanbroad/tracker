@@ -227,7 +227,7 @@ const Window = struct {
             return error.SDLInitializationFailed;
         };
         t2 = milliTimestamp();
-        print("CreateWindow [{}ms]\n", .{t2 - t1});
+        // print("CreateWindow [{}ms]\n", .{t2 - t1});
 
         t1 = milliTimestamp();
         const surface = SDL_GetWindowSurface(window) orelse {
@@ -235,7 +235,7 @@ const Window = struct {
             return error.SDLInitializationFailed;
         };
         t2 = milliTimestamp();
-        print("SDL_GetWindowSurface [{}ms]\n", .{t2 - t1});
+        // print("SDL_GetWindowSurface [{}ms]\n", .{t2 - t1});
 
         // @breakpoint();
         var pix: [][4]u8 = undefined;
@@ -450,13 +450,8 @@ fn drawTee(root: *NodeUnion) !void {
 
 const NNReturn = struct { dist: f32, pt: Pt, node: NodeUnion };
 
-pub fn findNearestNeib(tree_root: *NodeUnion, query_point: Pt) NNReturn {
+pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
     // TODO: be more efficient than 2*N here. shouldn't be nearly that many.
-    var node_stack: [100]NodeUnion = undefined;
-    var h_idx: u32 = 0;
-
-    node_stack[h_idx] = tree_root.*;
-    h_idx += 1;
 
     var current_min_dist = dist(tree_root.Split.pt, query_point);
     var current_min_node = tree_root.*;
@@ -486,6 +481,7 @@ pub fn findNearestNeib(tree_root: *NodeUnion, query_point: Pt) NNReturn {
         }
     }
 
+    // Test it again just in case the last node was a leaf!
     if (traversing_node == .Leaf) {
         const n = traversing_node.Leaf;
         const next_dist = dist(n.pt, query_point);
@@ -495,6 +491,13 @@ pub fn findNearestNeib(tree_root: *NodeUnion, query_point: Pt) NNReturn {
             current_pt = n.pt;
         }
     }
+
+    // Now we do the full-tree depth-first search with pruing using an explicit stack.
+    var node_stack: [100]NodeUnion = undefined;
+    var h_idx: u32 = 0;
+
+    node_stack[h_idx] = tree_root.*;
+    h_idx += 1;
 
     while (h_idx > 0) {
         itercount += 1;
@@ -524,20 +527,180 @@ pub fn findNearestNeib(tree_root: *NodeUnion, query_point: Pt) NNReturn {
         // If the orthogonal displacement is greater than the current best distance (D)
         // then we know we can avoid any points on the greater side. If the orthogonal
         // displacement is less than -D, then we can avoid any points on the lesser side.
-        if (!(orthogonal_distance > current_min_dist)) {
-            // add s.r
+
+        // Walk down the tree in the direction of query_point
+        // If you're far away from the query point you can completly avoid some branches
+        // If you're within the query point current best radius then you first search
+        // down the closer side by adding it 2nd in the stack.
+        if (orthogonal_distance < -current_min_dist) {
             node_stack[h_idx] = s.r.*;
             h_idx += 1;
-        }
-        if (!(orthogonal_distance < -current_min_dist)) {
-            // add s.l
+        } else if (orthogonal_distance < 0) {
+            node_stack[h_idx] = s.l.*;
+            h_idx += 1;
+            node_stack[h_idx] = s.r.*;
+            h_idx += 1;
+        } else if (orthogonal_distance < current_min_dist) {
+            node_stack[h_idx] = s.r.*;
+            h_idx += 1;
+            node_stack[h_idx] = s.l.*;
+            h_idx += 1;
+        } else {
             node_stack[h_idx] = s.l.*;
             h_idx += 1;
         }
+
+        // if (!(orthogonal_distance > current_min_dist)) {
+        //     // add s.r
+        //     node_stack[h_idx] = s.r.*;
+        //     h_idx += 1;
+        // }
+        // if (!(orthogonal_distance < -current_min_dist)) {
+        //     // add s.l
+        //     node_stack[h_idx] = s.l.*;
+        //     h_idx += 1;
+        // }
     }
 
-    print("itercount = {d}\n", .{itercount});
+    // print("itercount = {d}\n", .{itercount});
     return .{ .dist = current_min_dist, .pt = current_pt, .node = current_min_node };
+}
+
+pub fn greatestLowerBoundIndex(pts: []Pt, dim: u8, query_point: Pt) !usize {
+    const target_val = query_point[dim];
+
+    var lower_bound_idx: usize = 0; // inclusive
+    var upper_bound_idx: usize = pts.len; // exclusive
+
+    // INVALID INDEX ENCODES
+    if (query_point[dim] < pts[0][dim]) return error.IndexOOB;
+    if (query_point[dim] > pts[pts.len - 1][dim]) return pts.len - 1;
+
+    while (true) {
+
+        // First look in the middle. Rounds down so (1 + 0) / 2 == 0, but
+        // (2 + 0) / 2 == 1, so the median falls to the right side.
+        var current_idx = (upper_bound_idx + lower_bound_idx) / 2;
+        var current_val = pts[current_idx][dim];
+
+        // print("{any} \n", .{.{ .low = lower_bound_idx, .hi = upper_bound_idx, .cur = current_idx }});
+
+        // If current_val < target_val then we need to move the lower bound up.
+        if (current_val < target_val) {
+            lower_bound_idx = current_idx + 1; // inclusive
+        } else if (current_val == target_val) {
+            return current_idx;
+        } else {
+            upper_bound_idx = current_idx; // don't try this index
+        }
+
+        if (lower_bound_idx == upper_bound_idx) return lower_bound_idx;
+    }
+}
+
+test "test greatestLowerBoundIndex" {
+    print("\n", .{});
+    const a = allocator;
+    var pts = try a.alloc(Pt, N);
+    defer a.free(pts);
+    for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
+
+    const dim_idx: u8 = 0;
+    std.sort.sort(Pt, pts, dim_idx, ltPtsIdx);
+    // const query_point = .{ random.float(f32), random.float(f32) };
+
+    {
+        const query_point = pts[999];
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == 999);
+    }
+
+    {
+        const query_point = pts[998];
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == 998);
+    }
+
+    {
+        const query_point = pts[997];
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == 997);
+    }
+    {
+        const query_point = pts[0];
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == 0);
+    }
+    {
+        const query_point = pts[N - 1];
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == N - 1);
+    }
+
+    {
+        var query_point = pts[0];
+        query_point[0] -= 0.1;
+        const glb_idx = greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == error.IndexOOB);
+    }
+
+    {
+        var query_point = pts[pts.len - 1];
+        query_point[0] += 0.1;
+        const glb_idx = try greatestLowerBoundIndex(pts, dim_idx, query_point);
+        try std.testing.expect(glb_idx == pts.len - 1);
+    }
+}
+
+pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
+
+    // First we find the greatest lower bound (index)
+    const dim_idx = 0;
+    const glb_idx = greatestLowerBoundIndex(pts, dim_idx, query_point) catch pts.len - 1;
+
+    // Now we know where to start our search. Get the d_euclid to query_point,
+    // and search outwards along the sorted dimension. You can stop searching
+    // when the d_axis of current point > d_euclid_best.
+
+    var current_best_dist = dist(pts[glb_idx], query_point);
+    var current_best_idx = glb_idx;
+    var idx_offset: u16 = 1;
+
+    // First search to the left.
+    while (true) {
+        const idx = glb_idx - idx_offset;
+        if (idx == 0) break;
+        const current_pt = pts[idx];
+        const d_axis = current_pt[dim_idx] - query_point[dim_idx];
+        if (d_axis < -current_best_dist) break;
+        const d_euclid = dist(current_pt, query_point);
+        if (d_euclid < current_best_dist) {
+            current_best_dist = d_euclid;
+            current_best_idx = idx;
+        }
+        idx_offset += 1;
+    }
+
+    idx_offset = 1;
+
+    // Then search to the right.
+    // First search to the left.
+    while (true) {
+        const idx = glb_idx + idx_offset;
+        if (idx == pts.len) break;
+        const current_pt = pts[idx];
+        const d_axis = current_pt[dim_idx] - query_point[dim_idx];
+        if (d_axis > current_best_dist) break;
+        const d_euclid = dist(current_pt, query_point);
+        if (d_euclid < current_best_dist) {
+            current_best_dist = d_euclid;
+            current_best_idx = idx;
+        }
+        idx_offset += 1;
+    }
+
+    return pts[current_best_idx];
+    // return .{ .pt = pts[current_best_idx], .dist = current_best_dist };
 }
 
 test "simple union experiment" {
@@ -576,12 +739,26 @@ test "build a Tree" {
     // try printTree(a, q, 0);
 }
 
-const N = 10_001;
+const N = 1_001;
+
+pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
+    var closest_pt: Pt = pts[0];
+    var closest_dist: f32 = dist(query_point, pts[0]);
+    for (pts) |p| {
+        const d = dist(query_point, p);
+        if (d < closest_dist) {
+            closest_pt = p;
+            closest_dist = d;
+        }
+    }
+    return closest_pt;
+}
 
 pub fn main() !u8 {
 
     // Setup SDL & open window
     var t1 = milliTimestamp();
+    _ = t1;
     if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) {
         cc.SDL_Log("Unable to initialize SDL: %s", cc.SDL_GetError());
         return error.SDLInitializationFailed;
@@ -589,7 +766,8 @@ pub fn main() !u8 {
     defer cc.SDL_Quit();
 
     var t2 = milliTimestamp();
-    print("SDL_Init [{}ms]\n", .{t2 - t1});
+    _ = t2;
+    // print("SDL_Init [{}ms]\n", .{t2 - t1});
 
     win = try Window.init(1000, 800);
     // defer win.deinit();
@@ -618,38 +796,27 @@ pub fn main() !u8 {
     _ = cc.SDL_PollEvent(&e);
 
     // try drawTee(tree_root);
+    const dim_idx: u8 = 0;
+    std.sort.sort(Pt, pts, dim_idx, ltPtsIdx);
 
     for (0..1000) |_| {
         const query_point = Pt{ random.float(f32), random.float(f32) };
 
         const span_kdtree = trace.Span.open("kdtree");
-        const nearest_neib = findNearestNeib(tree_root, query_point);
-        _ = nearest_neib;
+        const nn_kdtree = findNearestNeibKDTree(tree_root, query_point).pt;
         span_kdtree.close();
 
         const span_brute_force = trace.Span.open("brute_force");
-        var closest_pt: Pt = pts[0];
-        var closest_dist: f32 = dist(query_point, pts[0]);
-        for (pts) |p| {
-            const d = dist(query_point, p);
-            if (d < closest_dist) {
-                closest_pt = p;
-                closest_dist = d;
-            }
-        }
+        const nn_brute_force = findNearestNeibBruteForce(pts, query_point);
         span_brute_force.close(); // Span is closed automatically when the function returns
 
+        const span_sorted = trace.Span.open("sorted");
+        const nn_bsorted = findNearestNeibFromSortedList(pts, query_point);
+        span_sorted.close(); // Span is closed automatically when the function returns
+
+        try std.testing.expectEqualDeep(nn_kdtree, nn_brute_force);
+        try std.testing.expectEqualDeep(nn_kdtree, nn_bsorted);
     }
-
-    // print(
-    //     "query {d:0.3}, nearest {d:0.3}, closest {d:0.3} \n\n",
-    //     .{ query_point, nearest_neib.pt, closest_pt },
-    // );
-
-    // print(
-    //     "nn.dist {d:0.3}, true dist {d:0.3} \n\n",
-    //     .{ nearest_neib.dist, closest_dist },
-    // );
 
     return 0;
 }

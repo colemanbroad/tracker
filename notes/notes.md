@@ -159,13 +159,34 @@ But with KDTrees there's another way of viewing it...
 **We start off willing to (depth first) search the entire tree!** 
 But we can prune any branch where we can prove that it only contains regions that are unnecessary to check, i.e. we can skip any branch (x < p.x) if |p.x - q.x| > current_radius! That's all we have to check! Otherwise it's a simple depth first search with pruning!
 
-!!! OK, after some exhaustive bug fixing I've implemented the Pointer Tree version of a KDTree and it's ONLY THREE TIMES FASTER THAN BRUTE FORCE iteration.
-We even are clever about reducing the number of iterations required to find the true point. Instead of 10k checks we only need avg of 35 checks! But still these 35 take about the same amount of time... Why? Is it just because of pointer indirection?
+!!! OK, after some exhaustive bug fixing I've implemented the Pointer Tree version of a KDTree and it's ONLY THREE TIMES FASTER THAN BRUTE FORCE iteration on 10k points. And 25x faster on 100k pts. We even are clever about reducing the number of iterations required to find the true point. Instead of 10k checks we only need avg of 35 checks! But still these 35 take about the same amount of time... Why? Is it just because of pointer indirection?
 
 And the absolute timing was about 75us / NN query with N=10k pts. This is 75ms to query 1k pts. Or about 7ns / point. That's between 20/30 ops / point. That's pretty good? Right ballpark.
 
 Also, using ReleaseFast actually slowed the brute force NN timing down! Why is that?
 
+OK, I've profiled all the variants and the sorted list approach is actually
+slightly faster than KDTree and avoids a few hyperparams.
+
+N=1k pts (1000 trials)
+name                          | mean (ns) | std dev
+findNearestNeibBruteForce     | 24_504    | 6_278
+findNearestNeibKDTree         | 19_070    | 6_888
+findNearestNeibFromSortedList | 18_082    | 4_705
+
+N=10k pts (1000 trials)
+name                          | mean (ns) | std dev
+findNearestNeibBruteForce     | 75_815    | 16_411
+findNearestNeibKDTree         | 18_462    | 6_820
+findNearestNeibFromSortedList | 17_630    | 4_160
+
+N=100k pts (1000 trials)
+name                          | mean (ns) | std dev
+findNearestNeibBruteForce     | 514_601   | 32_465
+findNearestNeibKDTree         | 17_875    | 3_546
+findNearestNeibFromSortedList | 17_405    | 2_578
+
+Variants of `findNearestNeibFromSortedList` approach will work even for more complex cost functions.
 
 
 
