@@ -21,16 +21,17 @@
 -[x] priority queue for next vertex to choose
 -[x] Evaluate actual tracking performance
 -[x] replace O(n^2)-space container for temporal edges
--[ ] fast spatial nn data struct. grid hash / KDTree / other
+-[x] fast spatial nn data struct. grid hash / KDTree / other
 
 -[ ] Implement the scoring functions in Zig.
 -[ ] Implement a Tracking type and a DetectionTimeseries type.
 -[ ] Figure out how to move more complex types across the Zig / Python boundary.
 -[ ] Fast, brute force search of tracking solutions with brute force search.
--[ ] 
 
 
--[x] tracy profiling
+-[x] Tracy profiling
+-[x] XCode Instruments Profiling
+-[x] Custom profiling
 -[ ] more efficient way to find first conflicting triangle?
 -[ ] speed test suite
 -[ ] delaunay 3D
@@ -207,8 +208,9 @@ Download tracy to a source folder in software-thirdparty/ and git update it.
 Then build the server (it was already built on previous mac, nice).
 Then when building the local project you have to do `addTracy(b,exe)` to add options to your CompileStep, and when building you have to use `zig build -Dtracy=/Users/broaddus/Desktop/software-thirdparty/tracy/`.
 
-I've stashed a commit in the tracy repo that shows how to build on M1 mac.
-I should really have made a branch...
+I've stashed a commit in the tracy repo that shows how to build on M1 mac. I should really have made a branch...
+
+NOTE: Fix the size issue with `export TRACY_DPI_SCALE=1.0`
 
 OK I'm just about fed up with macos... Tracy works at random. I've managed to make it segfault my application whenever I run a .Debug build. Then when I ran a .RelaseFast it would ignore 1/3 or 1/4 of my tracing annotations! But at least these timings looks reasonable... Only 120ns / point with 10k particles?
 
@@ -287,7 +289,21 @@ Hyperfine is for benchmarking command line programs, and not really for ns-preci
 Why is trace.zig so off base? Was I doing something wrong??
 Maybe the reason is because it calls std.log! It really shouldn't be writing to std out... but instead should be writing to memory and then dumping when we C-C SIG ABORT.
 
+OK, Actually getting timings statistics for individual functions is really easy...
+We just have to keep track of the timestamps ourselves!
 
+    N = 100_000 N_trials=5_000 (no brute force. notice kdtree time!)
+    kdtree mean      712.200 stddev      815.438
+    sorted mean      737.600 stddev      502.309
+
+    N = 100_000 N_trials=5_000 (brute force must clear the cache and kill KDTree perf!)
+    kdtree mean     1258.200 stddev     1147.694
+     brute mean   126145.563 stddev     5487.230
+    sorted mean      710.800 stddev      812.363
+
+This way we can avoid Tracy, Trace.zig, Instruments, profiler, python, etc... It's just way faster!
+
+The cool thing we learn is that including brute slows down KDTree but not Sorted, because Sorted references the same data as brute force and probably doesn't require moving stuff in/out of cache!
 
 
 

@@ -3,8 +3,45 @@ const print = std.debug.print;
 const Allocator = std.mem.Allocator;
 
 // const trace = @import("tracy.zig").trace;
-const trace = @import("trace");
-pub const enable_trace = true;
+// const trace = @import("trace");
+// pub const enable_trace = true;
+
+// OK Here's my timer idea. Instead of writing to std.log on open and close
+// it just saves the times in memory and writes them all at the end. This
+// should allow for nanosecond level profiling.
+// The interface should be very similar and easy. We pass in a SourceLocation
+// and automatically get the function name.
+// const trace = struct {
+//     // var spanlist = std.ArrayList(trace.Span)
+
+//     const Span = struct {
+//         const OpenClose = struct {open:u64, close:u64};
+//         const This = @This();
+
+//         name: []const u8,
+//         timings:[10_000]OpenClose,
+
+//         pub fn open(this: This , comptime name : []const u8) void {
+
+//         }
+//     };
+// };
+
+const Trace = struct {
+    v: [10_000]i128 = undefined,
+    idx: usize = 0,
+
+    pub fn tic(this: *Trace) void {
+        this.v[this.idx] = std.time.nanoTimestamp();
+        this.idx += 1;
+    }
+};
+
+const traces = struct {
+    var kdtree = Trace{};
+    var brute = Trace{};
+    var sorted = Trace{};
+};
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
@@ -462,8 +499,10 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
 
     // const tracy3 = trace(@src());
     // defer tracy3.end();
-    const tracy = trace.Span.open(@src().fn_name);
-    defer tracy.close();
+    // const tracy = trace.Span.open(@src().fn_name);
+    // defer tracy.close();
+    traces.kdtree.tic();
+    defer traces.kdtree.tic();
 
     var current_min_dist = dist(tree_root.Split.pt, query_point);
     var current_min_node = tree_root.*;
@@ -581,8 +620,8 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
 pub fn greatestLowerBoundIndex(pts: []Pt, dim: u8, query_point: Pt) !usize {
     // const tracy4 = trace(@src());
     // defer tracy4.end();
-    const tracy = trace.Span.open(@src().fn_name);
-    defer tracy.close();
+    // const tracy = trace.Span.open(@src().fn_name);
+    // defer tracy.close();
 
     const target_val = query_point[dim];
 
@@ -672,8 +711,10 @@ test "test greatestLowerBoundIndex" {
 pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
     // const tracy1 = trace(@src());
     // defer tracy1.end();
-    const tracy = trace.Span.open(@src().fn_name);
-    defer tracy.close();
+    // const tracy = trace.Span.open(@src().fn_name);
+    // defer tracy.close();
+    traces.sorted.tic();
+    defer traces.sorted.tic();
 
     // First we find the greatest lower bound (index)
     const dim_idx = 0;
@@ -763,14 +804,17 @@ test "build a Tree" {
     // try printTree(a, q, 0);
 }
 
-const N = 10_001;
+const N = 100_001;
 
 pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
     // const tracy2 = trace(@src());
     // defer tracy2.end();
 
-    const tracy = trace.Span.open(@src().fn_name);
-    defer tracy.close();
+    // const tracy = trace.Span.open(@src().fn_name);
+    // defer tracy.close();
+
+    traces.brute.tic();
+    defer traces.brute.tic();
 
     var closest_pt: Pt = pts[0];
     var closest_dist: f32 = dist(query_point, pts[0]);
@@ -825,8 +869,8 @@ pub fn main() !u8 {
 
     std.sort.heap(Pt, pts, dim_idx, ltPtsIdx);
 
-    // for (0..10_000) |i| {
-    while (true) {
+    for (0..5_000) |_| {
+        // while (true) {
         const query_point = Pt{ random.float(f32), random.float(f32) };
 
         const nn_kdtree = findNearestNeibKDTree(tree_root, query_point).pt;
@@ -847,5 +891,26 @@ pub fn main() !u8 {
         // };
     }
 
+    analyze("kdtree", traces.kdtree);
+    analyze("brute", traces.brute);
+    analyze("sorted", traces.sorted);
+
     return 0;
+}
+
+fn analyze(name: []const u8, trace: Trace) void {
+    var mean: f32 = 0;
+    var stddev: f32 = 0;
+    const size = trace.v.len / 2;
+    for (0..size) |i| {
+        const delta = trace.v[2 * i + 1] - trace.v[2 * i];
+        const deltaf32 = @intToFloat(f32, delta);
+        mean += deltaf32;
+        stddev += deltaf32 * deltaf32;
+    }
+    mean = mean / @intToFloat(f32, size);
+    // stddev = <x^2> - <x>^2
+    stddev = stddev / @intToFloat(f32, size) - mean * mean;
+    stddev = @sqrt(stddev);
+    print("{s:20} mean {d:>12.3} stddev {d:>12.3} \n", .{ name, mean, stddev });
 }

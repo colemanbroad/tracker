@@ -79,9 +79,9 @@ pub fn build(b: *Builder) void {
     const kdtree2d = b.addExecutable(.{
         .name = "exe-kdtree2d",
         .root_source_file = .{ .path = "src/kdtree2d.zig" },
-        .optimize = .ReleaseSafe,
+        // .optimize = .ReleaseSafe,
         // .optimize = .ReleaseSmall,
-        // .optimize = .ReleaseFast,
+        .optimize = .ReleaseFast,
         // .optimize = .Debug,
     });
     // kdtree2d.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
