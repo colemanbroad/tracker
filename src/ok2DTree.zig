@@ -83,9 +83,9 @@ fn ltPtY(_: anytype, lhs: Pt, rhs: Pt) bool {
 /// TODO: WIP
 fn buildTreeNoRecurse(a: Allocator, pts: []Pt) Allocator.Error!void {
     _ = a;
-    const xsorted = std.sort.sort(Pt, pts, 0, ltPtX);
+    const xsorted = std.sort.heap(Pt, pts, 0, ltPtX);
     _ = xsorted;
-    const ysorted = std.sort.sort(Pt, pts, 0, ltPtY);
+    const ysorted = std.sort.heap(Pt, pts, 0, ltPtY);
     _ = ysorted;
 
     // We don't want to hold nodes to build the tree, we need
@@ -117,7 +117,7 @@ fn buildTree(a: Allocator, pts: []Pt, dim: XY) Allocator.Error!*KDNode {
     }
 
     // sort by dimension
-    std.sort.sort(Pt, pts, dim, ltPtsDims);
+    std.sort.heap(Pt, pts, dim, ltPtsDims);
 
     const idx: usize = pts.len / 2;
     const median = pts[idx];
@@ -254,7 +254,7 @@ test "kdnode test" {
     defer a.free(pts);
     for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
-    // std.sort.sort(f32, pts, {}, comptime std.sort.asc(f32));
+    // std.sort.heap(f32, pts, {}, comptime std.sort.asc(f32));
     var q = try buildTree(a, pts[0..], .X);
     defer deleteNodeAndChildren(a, q);
 
@@ -266,7 +266,7 @@ fn testNearest(a: Allocator, N: u32) !void {
     defer a.free(pts);
     for (pts) |*v| v.* = random.float(f32);
 
-    std.sort.sort(f32, pts, {}, comptime std.sort.asc(f32));
+    std.sort.heap(f32, pts, {}, comptime std.sort.asc(f32));
     var q = try buildTree(a, pts[0..], .X);
     defer deleteNodeAndChildren(a, q);
 
@@ -442,7 +442,7 @@ pub fn main() !u8 {
     defer a.free(pts);
     for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
-    // std.sort.sort(f32, pts, {}, comptime std.sort.asc(f32));
+    // std.sort.heap(f32, pts, {}, comptime std.sort.asc(f32));
     var q = try buildTree(a, pts[0..], .X);
     // defer deleteNodeAndChildren(a, q);
 

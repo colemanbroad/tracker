@@ -25,24 +25,11 @@ def run():
 	table = table.groupby('name').apply(timedelta)
 	
 	display_str = "{:12s} | {:8_d} | {:8_d}"
-	print(display_str.format(
-		'kdtree',
-		int(table['kdtree'].mean()),
-		int(table['kdtree'].std())),
-	)
-
-	print(display_str.format(
-		'brute_force',
-		int(table['brute_force'].mean()),
-		int(table['brute_force'].std())),
-	)
-
-	print(display_str.format(
-		'sorted',
-		int(table['sorted'].mean()),
-		int(table['sorted'].std())),
-	)
-
-
+	for name in table.index:
+		print(display_str.format(
+			name,
+			int(table[name].mean()),
+			int(table[name].std())),
+		)
 
 

@@ -2,8 +2,8 @@ const std = @import("std");
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
 
+// const trace = @import("tracy.zig").trace;
 const trace = @import("trace");
-const Span = trace.Span;
 pub const enable_trace = true;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -69,10 +69,17 @@ fn ltPtY(_: anytype, lhs: Pt, rhs: Pt) bool {
     return lhs[1] < rhs[1];
 }
 
-fn dist(a: Pt, b: Pt) f32 {
+pub fn dist(a: Pt, b: Pt) f32 {
     // return std.math.absFloat(a - b);
     const d = Pt{ a[0] - b[0], a[1] - b[1] };
     const norml2 = @sqrt(d[0] * d[0] + d[1] * d[1]);
+    return norml2;
+}
+
+pub fn distSquared(a: Pt, b: Pt) f32 {
+    // return std.math.absFloat(a - b);
+    const d = Pt{ a[0] - b[0], a[1] - b[1] };
+    const norml2 = d[0] * d[0] + d[1] * d[1];
     return norml2;
 }
 
@@ -137,7 +144,7 @@ fn buildTree(pts: []Pt, bounding_volume: Volume) !*NodeUnion {
 
     // find median point P along the axis with greater variance
     const idx = pt_argmax(v2(span.max) - v2(span.min));
-    std.sort.sort(Pt, pts, idx, ltPtsIdx);
+    std.sort.heap(Pt, pts, idx, ltPtsIdx);
     const midpoint = pts[pts.len / 2];
 
     // Update bounding volumes for both sides of the split
@@ -453,6 +460,11 @@ const NNReturn = struct { dist: f32, pt: Pt, node: NodeUnion };
 pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
     // TODO: be more efficient than 2*N here. shouldn't be nearly that many.
 
+    // const tracy3 = trace(@src());
+    // defer tracy3.end();
+    const tracy = trace.Span.open(@src().fn_name);
+    defer tracy.close();
+
     var current_min_dist = dist(tree_root.Split.pt, query_point);
     var current_min_node = tree_root.*;
     var current_pt = tree_root.Split.pt;
@@ -567,6 +579,11 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
 }
 
 pub fn greatestLowerBoundIndex(pts: []Pt, dim: u8, query_point: Pt) !usize {
+    // const tracy4 = trace(@src());
+    // defer tracy4.end();
+    const tracy = trace.Span.open(@src().fn_name);
+    defer tracy.close();
+
     const target_val = query_point[dim];
 
     var lower_bound_idx: usize = 0; // inclusive
@@ -606,7 +623,7 @@ test "test greatestLowerBoundIndex" {
     for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
     const dim_idx: u8 = 0;
-    std.sort.sort(Pt, pts, dim_idx, ltPtsIdx);
+    std.sort.heap(Pt, pts, dim_idx, ltPtsIdx);
     // const query_point = .{ random.float(f32), random.float(f32) };
 
     {
@@ -653,10 +670,14 @@ test "test greatestLowerBoundIndex" {
 }
 
 pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
+    // const tracy1 = trace(@src());
+    // defer tracy1.end();
+    const tracy = trace.Span.open(@src().fn_name);
+    defer tracy.close();
 
     // First we find the greatest lower bound (index)
     const dim_idx = 0;
-    const glb_idx = greatestLowerBoundIndex(pts, dim_idx, query_point) catch pts.len - 1;
+    const glb_idx = greatestLowerBoundIndex(pts, dim_idx, query_point) catch 0;
 
     // Now we know where to start our search. Get the d_euclid to query_point,
     // and search outwards along the sorted dimension. You can stop searching
@@ -664,24 +685,27 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
 
     var current_best_dist = dist(pts[glb_idx], query_point);
     var current_best_idx = glb_idx;
-    var idx_offset: u16 = 1;
+    var idx_offset: u16 = 0;
 
     // First search to the left.
     while (true) {
         const idx = glb_idx - idx_offset;
-        if (idx == 0) break;
         const current_pt = pts[idx];
+        if (query_point[0] == 0.0855857804 and current_pt[0] == 0.0828876867) @breakpoint();
         const d_axis = current_pt[dim_idx] - query_point[dim_idx];
         if (d_axis < -current_best_dist) break;
         const d_euclid = dist(current_pt, query_point);
+        // WARNING: TODO: make all nn methods consistent when multiple points
+        // have the same distance.
         if (d_euclid < current_best_dist) {
             current_best_dist = d_euclid;
             current_best_idx = idx;
         }
+        if (idx == 0) break;
         idx_offset += 1;
     }
 
-    idx_offset = 1;
+    idx_offset = 0;
 
     // Then search to the right.
     // First search to the left.
@@ -739,13 +763,22 @@ test "build a Tree" {
     // try printTree(a, q, 0);
 }
 
-const N = 1_001;
+const N = 10_001;
 
 pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
+    // const tracy2 = trace(@src());
+    // defer tracy2.end();
+
+    const tracy = trace.Span.open(@src().fn_name);
+    defer tracy.close();
+
     var closest_pt: Pt = pts[0];
     var closest_dist: f32 = dist(query_point, pts[0]);
     for (pts) |p| {
+        // me too
         const d = dist(query_point, p);
+
+        // test me out
         if (d < closest_dist) {
             closest_pt = p;
             closest_dist = d;
@@ -757,65 +790,61 @@ pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
 pub fn main() !u8 {
 
     // Setup SDL & open window
-    var t1 = milliTimestamp();
-    _ = t1;
-    if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) {
-        cc.SDL_Log("Unable to initialize SDL: %s", cc.SDL_GetError());
-        return error.SDLInitializationFailed;
-    }
-    defer cc.SDL_Quit();
+    // if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) return error.SDLInitializationFailed;
+    // defer cc.SDL_Quit();
+    // win = try Window.init(1000, 800);
+    // // defer win.deinit();
+    // win.markBounds();
 
-    var t2 = milliTimestamp();
-    _ = t2;
-    // print("SDL_Init [{}ms]\n", .{t2 - t1});
-
-    win = try Window.init(1000, 800);
-    // defer win.deinit();
-    win.markBounds();
+    // std.log.defaultLogEnabled(comptime message_level: Level)
 
     const a = allocator;
     var pts = try a.alloc(Pt, N);
     defer a.free(pts);
     for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
-    for (pts) |p| {
-        const x = @floatToInt(i32, p[0] * 750 + 25);
-        const y = @floatToInt(i32, p[1] * 750 + 25);
-        im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
-    }
-    try win.update();
+    // for (pts) |p| {
+    //     const x = @floatToInt(i32, p[0] * 750 + 25);
+    //     const y = @floatToInt(i32, p[1] * 750 + 25);
+    //     im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
+    // }
+    // try win.update();
 
-    // std.sort.sort(f32, pts, {}, comptime std.sort.asc(f32));
+    // std.sort.heap(f32, pts, {}, comptime std.sort.asc(f32));
     var tree_root = try buildTree(pts[0..], .{ .min = .{ 0, 0 }, .max = .{ 1, 1 } });
 
     // defer deleteNodeAndChildren(a, tree_root);
     // const testimg = try im.Img2D([4]u8).init(1000, 800);
     // win.
 
-    var e: cc.SDL_Event = undefined;
-    _ = cc.SDL_PollEvent(&e);
+    // var e: cc.SDL_Event = undefined;
+    // _ = cc.SDL_PollEvent(&e);
 
     // try drawTee(tree_root);
     const dim_idx: u8 = 0;
-    std.sort.sort(Pt, pts, dim_idx, ltPtsIdx);
 
-    for (0..1000) |_| {
+    std.sort.heap(Pt, pts, dim_idx, ltPtsIdx);
+
+    // for (0..10_000) |i| {
+    while (true) {
         const query_point = Pt{ random.float(f32), random.float(f32) };
 
-        const span_kdtree = trace.Span.open("kdtree");
         const nn_kdtree = findNearestNeibKDTree(tree_root, query_point).pt;
-        span_kdtree.close();
-
-        const span_brute_force = trace.Span.open("brute_force");
         const nn_brute_force = findNearestNeibBruteForce(pts, query_point);
-        span_brute_force.close(); // Span is closed automatically when the function returns
-
-        const span_sorted = trace.Span.open("sorted");
+        if (query_point[0] == 0.0855857804) @breakpoint();
         const nn_bsorted = findNearestNeibFromSortedList(pts, query_point);
-        span_sorted.close(); // Span is closed automatically when the function returns
 
-        try std.testing.expectEqualDeep(nn_kdtree, nn_brute_force);
-        try std.testing.expectEqualDeep(nn_kdtree, nn_bsorted);
+        //     print("ERROR #1 PTS MISSING\n{d}\n{d}\n{d}\n{d}\n", .{ query_point, nn_kdtree, nn_brute_force, nn_bsorted });
+        // };
+        // std.testing.expectEqualDeep(nn_kdtree, nn_brute_force) catch {};
+        // const x1 = nn_bsorted[0];
+        // std.debug.print("x1 = {d}\n", .{x1});
+
+        std.testing.expectEqualDeep(nn_kdtree, nn_bsorted) catch @breakpoint();
+        std.testing.expectEqualDeep(nn_kdtree, nn_brute_force) catch @breakpoint();
+
+        //     print("ERROR #2 PTS MISSING\n{d}\n{d}\n{d}\n{d}\n", .{ query_point, nn_kdtree, nn_brute_force, nn_bsorted });
+        // };
     }
 
     return 0;

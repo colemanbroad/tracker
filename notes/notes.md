@@ -12,45 +12,52 @@
 
 # Todo
 
-- [x] Fixed delaunay memory issue. Can use > 10k pts.
-- [x] python interop and DLL reloading
-- [x] memory management. preallocate numpy arrays.
-- [x] greedy tracking that satisfies constraints
-- [x] greedy strain cost that grows outwards from initial guess
-- [x] make greedy tracking work in 2D/3D
-- [x] priority queue for next vertex to choose
-- [x] Evaluate actual tracking performance
-- [x] replace O(n^2)-space container for temporal edges
-- [ ] fast spatial nn data struct. grid hash. 
+-[x] Fixed delaunay memory issue. Can use > 10k pts.
+-[x] python interop and DLL reloading
+-[x] memory management. preallocate numpy arrays.
+-[x] greedy tracking that satisfies constraints
+-[x] greedy strain cost that grows outwards from initial guess
+-[x] make greedy tracking work in 2D/3D
+-[x] priority queue for next vertex to choose
+-[x] Evaluate actual tracking performance
+-[x] replace O(n^2)-space container for temporal edges
+-[ ] fast spatial nn data struct. grid hash / KDTree / other
 
-- [x] tracy profiling
-- [ ] more efficient way to find first conflicting triangle?
-- [ ] speed test suite
-- [ ] delaunay 3D
-- [ ] multiple implementations
-- [ ] better geometric datastructure with fewer hashes.
-    - [ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 
+-[ ] Implement the scoring functions in Zig.
+-[ ] Implement a Tracking type and a DetectionTimeseries type.
+-[ ] Figure out how to move more complex types across the Zig / Python boundary.
+-[ ] Fast, brute force search of tracking solutions with brute force search.
+-[ ] 
 
-- [ ] routines to rasterize continuous shapes
-- [ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
 
-- [ ] show flow direction in tracking images
-- [ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
-- [ ] use grid_hash for faster NN lookup when building tracking DAG.
-- [ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
-- [ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
-- [ ] vector median filter to clean up _any_ tracking
-- [ ] Viterbi tracker. Only consider local assignments = small transition matrix.
-- [ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
-- [ ] StarryNite
-- [ ] Fast Matching
-- [ ] Marching cubes
+-[x] tracy profiling
+-[ ] more efficient way to find first conflicting triangle?
+-[ ] speed test suite
+-[ ] delaunay 3D
+-[ ] multiple implementations
+-[ ] better geometric datastructure with fewer hashes.
+    -[ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 
+
+-[ ] routines to rasterize continuous shapes
+-[ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
+
+-[ ] show flow direction in tracking images
+-[ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
+-[ ] use grid_hash for faster NN lookup when building tracking DAG.
+-[ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
+-[ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
+-[ ] vector median filter to clean up _any_ tracking
+-[ ] Viterbi tracker. Only consider local assignments = small transition matrix.
+-[ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
+-[ ] StarryNite
+-[ ] Fast Matching
+-[ ] Marching cubes
 
 
 
 # Questions
 
-- [x] how to use dynamic / static `.a` or `.dylib` lib from zig ? 
+-[x] how to use dynamic / static `.a` or `.dylib` lib from zig ? 
 
 Link static lib with `exe.addObjectFile("vendor/libcurl/lib/libcurl.a");`
 Link dynamic lib with 
@@ -187,6 +194,99 @@ findNearestNeibKDTree         | 17_875    | 3_546
 findNearestNeibFromSortedList | 17_405    | 2_578
 
 Variants of `findNearestNeibFromSortedList` approach will work even for more complex cost functions.
+
+# Tracy Integration and Profiling
+
+## Trace.zig
+
+Easy to install and use, but not nanosecond precise. I got bogus numbers for all functions (25..75us) which was off by two orders of magnitude.
+
+## Tracy
+
+Download tracy to a source folder in software-thirdparty/ and git update it.
+Then build the server (it was already built on previous mac, nice).
+Then when building the local project you have to do `addTracy(b,exe)` to add options to your CompileStep, and when building you have to use `zig build -Dtracy=/Users/broaddus/Desktop/software-thirdparty/tracy/`.
+
+I've stashed a commit in the tracy repo that shows how to build on M1 mac.
+I should really have made a branch...
+
+OK I'm just about fed up with macos... Tracy works at random. I've managed to make it segfault my application whenever I run a .Debug build. Then when I ran a .RelaseFast it would ignore 1/3 or 1/4 of my tracing annotations! But at least these timings looks reasonable... Only 120ns / point with 10k particles?
+
+I've learned that running the tests in an infinite loop is a good trick to avoid short running program problems.
+
+Tracy works as long as I don't profile multiple funcs at once...
+
+N=100_000 - when alternating between kdtree and brute_force
+- `findNearestNeibBruteForce()` median=124us sigma=6us – OK This makes sense! It had been optimized out previously.
+- `findNearestNeibKDTree()` median=1.29us, sigma=995ns 
+- `findNearestNeibFromSortedList()` median=416ns sigma=215ns.
+
+N=100k – kdtree alone
+- `findNearestNeibKDTree()` median=708ns, sigma=901ns
+
+## Instruments
+
+So then I tried the builting `sample ...` command line utility and it apparently has no access to source info unless we build in .Debug mode... which totally throws off the timings! 
+Use `renice` to improve the quality of the `sample` util. [see](https://gist.github.com/loderunner/36724cc9ee8db66db305#improving-your-sample)
+So now I'm downloading 8GB XCode 14 just to be able to use their instrumentation tools... Which probably won't even work? I can't even install XCode 14... And XCode 12.5 does work with macos 12.5. And the Command Line Dev Tools don't even have Instruments. And then according to [this](https://stackoverflow.com/questions/11445619/profiling-c-on-mac-os-x) I'm not even supposed to use Instruments in 2022... But then I can't get the other thing (xctrace) to work... But then Instruments DOES WORK!!! And it knows my symbols! Why? 
+
+But unfortunately it smooshes everything together in a call tree when we really want to see the entire call stack including line numbers! This is the only way. Because fn A might call fn B in multiple locations. And fn A might be called from multiple different parents in different locations! And all this context might matter.
+
+## Hyperfine
+
+Maybe the best way to profile is just to do it from the command line....
+`/usr/bin/time -l zig-binary`
+OK I'm using hyperfine and this also works. Although it's cumbersome...
+But now I need to remove the infinite loop    
+
+NOTE: The ERRORs I found below are cases where the distance is exactly equal, i think.
+
+```
+~/Desktop/work/isbi/zig-tracker> ./zig-out/bin/exe-kdtree2d
+expected 8.28876867e-02, found 8.40167552e-02
+index 0 incorrect. expected 8.28876867e-02, found 8.40167552e-02
+ERROR #2 PTS MISSING
+query  { 0.08558578044176102, 0.2876039743423462 }
+kdtree { 0.0828876867890358, 0.2890166938304901 }
+brute  { 0.0828876867890358, 0.2890166938304901 }
+sorted { 0.08401675522327423, 0.29021427035331726 }
+expected 2.17668324e-01, found 1.99670672e-01
+index 0 incorrect. expected 2.17668324e-01, found 1.99670672e-01
+ERROR #1 PTS MISSING
+query  { 0.2101004272699356, 0.03756137564778328 }
+kdtree { 0.2176683247089386, 0.04700809717178345 }
+brute  { 0.199670672416687, 0.043704163283109665 }
+sorted { 0.199670672416687, 0.043704163283109665 }
+expected 2.17668324e-01, found 1.99670672e-01
+index 0 incorrect. expected 2.17668324e-01, found 1.99670672e-01
+ERROR #2 PTS MISSING
+query  { 0.2101004272699356, 0.03756137564778328 }
+kdtree { 0.2176683247089386, 0.04700809717178345 }
+brute  { 0.199670672416687, 0.043704163283109665 }
+sorted { 0.199670672416687, 0.043704163283109665 }
+expected 5.84149360e-01, found 5.79440653e-01
+index 0 incorrect. expected 5.84149360e-01, found 5.79440653e-01
+ERROR #1 PTS MISSING
+query  { 0.5918391346931458, 0.7836174964904785 }
+kdtree { 0.5841493606567383, 0.7933627367019653 }
+brute  { 0.5794406533241272, 0.7830010652542114 }
+sorted { 0.5841493606567383, 0.7933627367019653 }
+```
+
+## Summary
+
+There are at least two different things we were trying to do by profiling.
+
+1. Figure out exactly how long specific functions take to run.
+2. Figure out where our program spends it's time and why.
+
+Tracy tells us about the former and Instruments tells us about the latter. Tracy _does_ have a sampling profiler, but unfortunately it doesn't work on macos.
+
+Hyperfine is for benchmarking command line programs, and not really for ns-precise timings on code blocks.
+
+Why is trace.zig so off base? Was I doing something wrong??
+Maybe the reason is because it calls std.log! It really shouldn't be writing to std out... but instead should be writing to memory and then dumping when we C-C SIG ABORT.
+
 
 
 
