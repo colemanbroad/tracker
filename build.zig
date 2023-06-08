@@ -84,9 +84,9 @@ pub fn build(b: *Builder) void {
         .optimize = .ReleaseFast,
         // .optimize = .Debug,
     });
-    // kdtree2d.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    // kdtree2d.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
-    // kdtree2d.linkSystemLibraryName("SDL2");
+    kdtree2d.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
+    kdtree2d.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
+    kdtree2d.linkSystemLibraryName("SDL2");
     kdtree2d.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     // try addTracy(b, kdtree2d);
     b.installArtifact(kdtree2d);

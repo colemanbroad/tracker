@@ -27,12 +27,15 @@ const Allocator = std.mem.Allocator;
 //     };
 // };
 
+var timer: std.time.Timer = undefined;
+
 const Trace = struct {
-    v: [10_000]i128 = undefined,
+    v: [2 * Ntrials]u64 = undefined,
     idx: usize = 0,
 
     pub fn tic(this: *Trace) void {
-        this.v[this.idx] = std.time.nanoTimestamp();
+        this.v[this.idx] = timer.read();
+        // this.v[this.idx] = std.time.nanoTimestamp();
         this.idx += 1;
     }
 };
@@ -71,7 +74,8 @@ const NodeUnion = union(NodeTag) {
     Empty: struct { vol: Volume },
 };
 
-fn waitForUserInput() !i64 {
+// Waits for user input on the command line. "Enter" sends input.
+fn awaitCmdLineInput() !i64 {
     if (@import("builtin").is_test) return 0;
 
     const stdin = std.io.getStdIn().reader();
@@ -242,6 +246,7 @@ const Window = struct {
     surface: *cc.SDL_Surface,
     pix: im.Img2D([4]u8),
 
+    must_quit: bool = false,
     needs_update: bool,
     update_count: u64,
     windowID: u32,
@@ -351,7 +356,7 @@ const Window = struct {
     }
 
     fn markBounds(this: *This) void {
-        _ = cc.SDL_LockSurface(win.surface);
+        // _ = cc.SDL_LockSurface(this.surface);
         // TOP LEFT BLUE
         im.drawCircle([4]u8, this.pix, 0, 0, 13, .{ 255, 0, 0, 255 });
         // TOP RIGHT GREEN
@@ -360,7 +365,7 @@ const Window = struct {
         im.drawCircle([4]u8, this.pix, 0, @intCast(i32, this.ny), 13, .{ 0, 0, 255, 255 });
         // BOT RIGHT WHITE
         im.drawCircle([4]u8, this.pix, @intCast(i32, this.nx), @intCast(i32, this.ny), 13, .{ 255, 255, 255, 255 });
-        cc.SDL_UnlockSurface(this.surface);
+        // cc.SDL_UnlockSurface(this.surface);
     }
 
     // fn setPixelsFromRectangle(this: *This, img: im.Img2D([4]u8), r: Rect) void {
@@ -380,6 +385,8 @@ const Window = struct {
 };
 
 var win: Window = undefined;
+var sdl_event: cc.SDL_Event = undefined;
+
 const im = @import("image_base.zig");
 
 fn randomColor() [4]u8 {
@@ -391,7 +398,7 @@ fn randomColor() [4]u8 {
     };
 }
 
-fn drawTee(root: *NodeUnion) !void {
+fn drawTree(root: *NodeUnion) !void {
     const ParentNode = struct { parent: ?[2]i32, node: *NodeUnion };
     var node_q: [2 * N]ParentNode = undefined;
     var h_idx: usize = 0;
@@ -409,8 +416,7 @@ fn drawTee(root: *NodeUnion) !void {
 
     while (t_idx < h_idx) {
 
-        // if (try waitForUserInput() == 0) return;
-
+        // if (try awaitCmdLineInput() == 0) return;
         // win.setPixels(win.pix.img);
 
         try win.update();
@@ -442,6 +448,7 @@ fn drawTee(root: *NodeUnion) !void {
         // if (x == 192 and y == 572) @breakpoint();
 
         im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
+
         // Line to parent
         // if (parent_pt) |p| {
         // im.drawLineInBounds([4]u8, win.pix, p[0], p[1], x, y, .{ 255, 128, 0, 255 });
@@ -708,6 +715,28 @@ test "test greatestLowerBoundIndex" {
     }
 }
 
+// An event loop that only moves forward on KeyDown.
+// Use this in combination with drawing to the window to visually step
+// through algorithms!
+pub fn awaitKeyPressAndUpdateWindow() void {
+    if (win.must_quit) return;
+    while (true) {
+        _ = cc.SDL_WaitEvent(&sdl_event);
+        if (sdl_event.type == cc.SDL_KEYDOWN) {
+            switch (sdl_event.key.keysym.sym) {
+                cc.SDLK_q => std.os.exit(0),
+                cc.SDLK_f => {
+                    win.must_quit = true;
+                }, // finish
+                else => {
+                    win.update() catch {};
+                    break;
+                },
+            }
+        }
+    }
+}
+
 pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
     // const tracy1 = trace(@src());
     // defer tracy1.end();
@@ -719,6 +748,17 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
     // First we find the greatest lower bound (index)
     const dim_idx = 0;
     const glb_idx = greatestLowerBoundIndex(pts, dim_idx, query_point) catch 0;
+
+    im.drawCircle(
+        [4]u8,
+        win.pix,
+        @floatToInt(i32, query_point[0] * 750 + 25),
+        @floatToInt(i32, query_point[1] * 750 + 25),
+        3,
+        .{ 0, 0, 255, 255 },
+    );
+
+    var color: [4]u8 = undefined;
 
     // Now we know where to start our search. Get the d_euclid to query_point,
     // and search outwards along the sorted dimension. You can stop searching
@@ -738,10 +778,27 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
         const d_euclid = dist(current_pt, query_point);
         // WARNING: TODO: make all nn methods consistent when multiple points
         // have the same distance.
+
+        color = .{ 255, 255, 0, 255 };
+
         if (d_euclid < current_best_dist) {
             current_best_dist = d_euclid;
             current_best_idx = idx;
+            color = .{ 0, 255, 255, 255 };
         }
+
+        im.drawLineInBounds(
+            [4]u8,
+            win.pix,
+            @floatToInt(i32, query_point[0] * 750 + 25),
+            @floatToInt(i32, query_point[1] * 750 + 25),
+            @floatToInt(i32, current_pt[0] * 750 + 25),
+            @floatToInt(i32, current_pt[1] * 750 + 25),
+            color,
+        );
+
+        awaitKeyPressAndUpdateWindow();
+
         if (idx == 0) break;
         idx_offset += 1;
     }
@@ -749,18 +806,37 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) Pt {
     idx_offset = 0;
 
     // Then search to the right.
-    // First search to the left.
+
     while (true) {
         const idx = glb_idx + idx_offset;
         if (idx == pts.len) break;
         const current_pt = pts[idx];
         const d_axis = current_pt[dim_idx] - query_point[dim_idx];
-        if (d_axis > current_best_dist) break;
+
+        if (d_axis > current_best_dist) {
+            break;
+        }
+
+        color = .{ 255, 255, 0, 255 };
         const d_euclid = dist(current_pt, query_point);
         if (d_euclid < current_best_dist) {
             current_best_dist = d_euclid;
             current_best_idx = idx;
+            color = .{ 0, 255, 255, 255 };
         }
+
+        im.drawLineInBounds(
+            [4]u8,
+            win.pix,
+            @floatToInt(i32, query_point[0] * 750 + 25),
+            @floatToInt(i32, query_point[1] * 750 + 25),
+            @floatToInt(i32, current_pt[0] * 750 + 25),
+            @floatToInt(i32, current_pt[1] * 750 + 25),
+            color,
+        );
+
+        awaitKeyPressAndUpdateWindow();
+
         idx_offset += 1;
     }
 
@@ -804,7 +880,8 @@ test "build a Tree" {
     // try printTree(a, q, 0);
 }
 
-const N = 100_001;
+const N = 101;
+const Ntrials = 5_000;
 
 pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
     // const tracy2 = trace(@src());
@@ -832,85 +909,158 @@ pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) Pt {
 }
 
 pub fn main() !u8 {
+    timer = try std.time.Timer.start();
 
-    // Setup SDL & open window
-    // if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) return error.SDLInitializationFailed;
-    // defer cc.SDL_Quit();
-    // win = try Window.init(1000, 800);
-    // // defer win.deinit();
-    // win.markBounds();
-
-    // std.log.defaultLogEnabled(comptime message_level: Level)
-
+    // Create random points
     const a = allocator;
     var pts = try a.alloc(Pt, N);
     defer a.free(pts);
     for (pts) |*v| v.* = .{ random.float(f32), random.float(f32) };
 
-    // for (pts) |p| {
-    //     const x = @floatToInt(i32, p[0] * 750 + 25);
-    //     const y = @floatToInt(i32, p[1] * 750 + 25);
-    //     im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
-    // }
-    // try win.update();
+    // Initialize Drawing Pallete
+    //
+    if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) return error.SDLInitializationFailed;
+    defer cc.SDL_Quit();
+    win = try Window.init(1000, 800);
+    // win.markBounds();
+    for (pts) |p| {
+        const x = @floatToInt(i32, p[0] * 750 + 25);
+        const y = @floatToInt(i32, p[1] * 750 + 25);
+        im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
+    }
+    try win.update();
+    // _ = cc.SDL_PollEvent(&sdl_event);
+    // win.must_quit = true;
 
-    // std.sort.heap(f32, pts, {}, comptime std.sort.asc(f32));
+    // Build the KDTree
     var tree_root = try buildTree(pts[0..], .{ .min = .{ 0, 0 }, .max = .{ 1, 1 } });
+    // try drawTree(tree_root);
 
-    // defer deleteNodeAndChildren(a, tree_root);
-    // const testimg = try im.Img2D([4]u8).init(1000, 800);
-    // win.
-
-    // var e: cc.SDL_Event = undefined;
-    // _ = cc.SDL_PollEvent(&e);
-
-    // try drawTee(tree_root);
+    // Sort the points along the X dimension.
     const dim_idx: u8 = 0;
-
     std.sort.heap(Pt, pts, dim_idx, ltPtsIdx);
 
-    for (0..5_000) |_| {
+    for (0..Ntrials) |_| {
         // while (true) {
         const query_point = Pt{ random.float(f32), random.float(f32) };
 
         const nn_kdtree = findNearestNeibKDTree(tree_root, query_point).pt;
         const nn_brute_force = findNearestNeibBruteForce(pts, query_point);
-        if (query_point[0] == 0.0855857804) @breakpoint();
+        // if (query_point[0] == 0.0855857804) @breakpoint();
         const nn_bsorted = findNearestNeibFromSortedList(pts, query_point);
+
+        std.testing.expectEqualDeep(nn_kdtree, nn_bsorted) catch @breakpoint();
+        std.testing.expectEqualDeep(nn_kdtree, nn_brute_force) catch @breakpoint();
 
         //     print("ERROR #1 PTS MISSING\n{d}\n{d}\n{d}\n{d}\n", .{ query_point, nn_kdtree, nn_brute_force, nn_bsorted });
         // };
         // std.testing.expectEqualDeep(nn_kdtree, nn_brute_force) catch {};
         // const x1 = nn_bsorted[0];
         // std.debug.print("x1 = {d}\n", .{x1});
-
-        std.testing.expectEqualDeep(nn_kdtree, nn_bsorted) catch @breakpoint();
-        std.testing.expectEqualDeep(nn_kdtree, nn_brute_force) catch @breakpoint();
-
         //     print("ERROR #2 PTS MISSING\n{d}\n{d}\n{d}\n{d}\n", .{ query_point, nn_kdtree, nn_brute_force, nn_bsorted });
         // };
     }
 
-    analyze("kdtree", traces.kdtree);
-    analyze("brute", traces.brute);
-    analyze("sorted", traces.sorted);
+    const stat_kdtree = analyze(traces.kdtree);
+    const stat_brute = analyze(traces.brute);
+    const stat_sorted = analyze(traces.sorted);
+
+    print("{s:20} mean {d:>12.0} [ns]   stddev {d:>12.0} \n", .{ "kdtree", stat_kdtree.mean, stat_kdtree.stddev });
+    print("{s:20} mean {d:>12.0} [ns]   stddev {d:>12.0} \n", .{ "brute", stat_brute.mean, stat_brute.stddev });
+    print("{s:20} mean {d:>12.0} [ns]   stddev {d:>12.0} \n", .{ "sorted", stat_sorted.mean, stat_sorted.stddev });
+
+    print("\n\n\n", .{});
+
+    print("{any}\n", .{stat_kdtree});
+    print("{any}\n", .{stat_brute});
+    print("{any}\n", .{stat_sorted});
 
     return 0;
 }
 
-fn analyze(name: []const u8, trace: Trace) void {
-    var mean: f32 = 0;
-    var stddev: f32 = 0;
-    const size = trace.v.len / 2;
-    for (0..size) |i| {
-        const delta = trace.v[2 * i + 1] - trace.v[2 * i];
-        const deltaf32 = @intToFloat(f32, delta);
-        mean += deltaf32;
-        stddev += deltaf32 * deltaf32;
+fn analyze(trace: Trace) Stats {
+    var tics = blk: {
+        var tics: [Ntrials]f32 = undefined;
+        for (&tics, 0..) |*t, i| {
+            t.* = @intToFloat(f32, trace.v[2 * i + 1] - trace.v[2 * i]);
+        }
+        break :blk tics;
+    };
+
+    const s = statistics(f32, &tics);
+    return s;
+}
+
+const Stats = struct {
+    mean: f64,
+    min: f64,
+    max: f64,
+    mode: f64,
+    median: f64,
+    stddev: f64,
+
+    pub fn format(self: Stats, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+
+        try writer.print("{s:9} {d:>10.0}\n", .{ "mean", self.mean });
+        try writer.print("{s:9} {d:>10.0}\n", .{ "median", self.median });
+        try writer.print("{s:9} {d:>10.0}\n", .{ "mode", self.mode });
+        try writer.print("{s:9} {d:>10.0}\n", .{ "min", self.min });
+        try writer.print("{s:9} {d:>10.0}\n", .{ "max", self.max });
+        try writer.print("{s:9} {d:>10.0}\n", .{ "std dev", self.stddev });
+
+        try writer.writeAll("");
     }
-    mean = mean / @intToFloat(f32, size);
-    // stddev = <x^2> - <x>^2
-    stddev = stddev / @intToFloat(f32, size) - mean * mean;
-    stddev = @sqrt(stddev);
-    print("{s:20} mean {d:>12.3} stddev {d:>12.3} \n", .{ name, mean, stddev });
+};
+fn statistics(comptime T: type, arr: []T) Stats {
+
+    // var s = Stats{
+    //     .mean=0,
+    //     .stddev = 0,
+    //     .min=arr[0],
+    //     .max=arr[0],
+    //     .mode=arr[0],
+    //     .median=arr[0],
+    // };
+
+    var s: Stats = undefined;
+
+    s.mean = 0;
+    s.stddev = 0;
+
+    std.sort.heap(T, arr, {}, std.sort.asc(T));
+    for (arr) |x| {
+        s.mean += x;
+        s.stddev += x * x;
+        // s.min = @min(s.min, x);
+        // s.max = @max(s.max, x);
+    }
+    s.mean /= @intToFloat(f32, arr.len);
+    s.stddev /= @intToFloat(f32, arr.len);
+    s.stddev -= s.mean * s.mean;
+    s.stddev = @sqrt(s.stddev);
+
+    // @breakpoint();
+    s.min = arr[0];
+    s.max = arr[arr.len - 1];
+    s.median = arr[arr.len / 2];
+
+    var max_count: u32 = 0;
+    var current_count: u32 = 1;
+    s.mode = arr[0];
+    for (1..arr.len) |i| { // exclusive on right ?
+        if (arr[i] != arr[i - 1]) {
+            current_count = 1;
+            continue;
+        }
+
+        current_count += 1;
+        if (current_count <= max_count) continue;
+
+        max_count = current_count;
+        s.mode = arr[i];
+    }
+
+    return s;
 }

@@ -305,7 +305,10 @@ This way we can avoid Tracy, Trace.zig, Instruments, profiler, python, etc... It
 
 The cool thing we learn is that including brute slows down KDTree but not Sorted, because Sorted references the same data as brute force and probably doesn't require moving stuff in/out of cache!
 
-
+And I know these times are correct because they agree with the Tracy times!
+Using the official `std.time.Timer` gives more precise timings. But still I
+think there's a significant error on each timestamp. Maybe about 40ns ? I 
+wonder if this error exists in Tracy's timings ?
 
 
 
