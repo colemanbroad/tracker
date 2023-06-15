@@ -104,7 +104,6 @@ fn statistics(comptime T: type, arr: []T) Stats {
     s.stddev -= s.mean * s.mean;
     s.stddev = @sqrt(s.stddev);
 
-    // @breakpoint();
     s.min = arr[0];
     s.max = arr[arr.len - 1];
     s.median = arr[arr.len / 2];
