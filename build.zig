@@ -46,6 +46,12 @@ fn addTracy(b: *Builder, exe: *CompileStep) !void {
     }
 }
 
+pub fn addSDL(cs: *CompileStep) void {
+    cs.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
+    cs.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
+    cs.linkSystemLibraryName("SDL2");
+}
+
 pub fn build(b: *Builder) void {
     const test_delaunay = b.addTest(.{ .name = "test-delaunay", .root_source_file = .{ .path = "src/delaunay.zig" } });
     b.installArtifact(test_delaunay);
@@ -59,11 +65,25 @@ pub fn build(b: *Builder) void {
         .target = .{},
         .optimize = .Debug,
     });
-    lib_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
+    // lib_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     b.installArtifact(lib_tracker);
 
-    const test_tracker = b.addTest(.{ .name = "test-tracker", .root_source_file = .{ .path = "src/tracker.zig" } });
-    test_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
+    const exe_tracker = b.addExecutable(.{
+        .name = "exe-track",
+        .root_source_file = .{ .path = "src/tracker.zig" },
+        .target = .{},
+        .optimize = .Debug,
+    });
+    addSDL(exe_tracker);
+    b.installArtifact(exe_tracker);
+
+    const test_tracker = b.addTest(.{
+        .name = "test-tracker",
+        .root_source_file = .{ .path = "src/tracker.zig" },
+        .filter = "generateTracking",
+    });
+    addSDL(test_tracker);
+    // test_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     b.installArtifact(test_tracker);
 
     const test_tree2d = b.addExecutable(.{
@@ -71,9 +91,7 @@ pub fn build(b: *Builder) void {
         .root_source_file = .{ .path = "src/ok2DTree.zig" },
         .optimize = .Debug,
     });
-    test_tree2d.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    test_tree2d.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
-    test_tree2d.linkSystemLibraryName("SDL2");
+    addSDL(test_tree2d);
     b.installArtifact(test_tree2d);
 
     const kdtree2d = b.addExecutable(.{
@@ -81,26 +99,20 @@ pub fn build(b: *Builder) void {
         .root_source_file = .{ .path = "src/kdtree2d.zig" },
         // .optimize = .ReleaseSafe,
         // .optimize = .ReleaseSmall,
-        .optimize = .ReleaseFast,
-        // .optimize = .Debug,
+        // .optimize = .ReleaseFast,
+        .optimize = .Debug,
     });
-    kdtree2d.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    kdtree2d.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
-    kdtree2d.linkSystemLibraryName("SDL2");
-    kdtree2d.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
+    addSDL(kdtree2d);
+    // kdtree2d.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     // try addTracy(b, kdtree2d);
     b.installArtifact(kdtree2d);
 
     const sdl_sdltest = b.addExecutable(.{ .name = "sdl-sdltest", .root_source_file = .{ .path = "src/sdltest.c" } });
-    sdl_sdltest.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    sdl_sdltest.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
-    sdl_sdltest.linkSystemLibraryName("SDL2");
+    addSDL(sdl_sdltest);
     b.installArtifact(sdl_sdltest);
 
     const sdl_sdltest2 = b.addExecutable(.{ .name = "sdl-01_hello_SDL", .root_source_file = .{ .path = "src/01_hello_SDL.cpp" } });
-    sdl_sdltest2.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    sdl_sdltest2.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
-    sdl_sdltest2.linkSystemLibraryName("SDL2");
+    addSDL(sdl_sdltest2);
     b.installArtifact(sdl_sdltest2);
 
     // const test_basic = b.addTest(.{ .name = "test-basic", .root_source_file = .{ .path = "src/testBasic.zig" } });
