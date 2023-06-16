@@ -507,6 +507,143 @@ test "test greatestLowerBoundIndex" {
     }
 }
 
+const assert = std.debug.assert;
+
+pub fn greatestLowerBoundIndexGeneric(comptime T: type, pts: []T, dim: u8, query_point: Pt) !usize {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
+
+    const target_val = query_point[dim];
+
+    var lower_bound_idx: usize = 0; // inclusive
+    var upper_bound_idx: usize = pts.len; // exclusive
+
+    // INVALID INDEX ENCODES
+    if (query_point[dim] < pts[0].pt[dim]) return error.IndexOOB;
+    if (query_point[dim] > pts[pts.len - 1].pt[dim]) return pts.len - 1;
+
+    while (true) {
+
+        // First look in the middle. Rounds down so (1 + 0) / 2 == 0, but
+        // (2 + 0) / 2 == 1, so the median falls to the right side.
+        var current_idx = (upper_bound_idx + lower_bound_idx) / 2;
+        var current_val = pts[current_idx].pt[dim];
+
+        // print("{any} \n", .{.{ .low = lower_bound_idx, .hi = upper_bound_idx, .cur = current_idx }});
+
+        // If current_val < target_val then we need to move the lower bound up.
+        if (current_val < target_val) {
+            lower_bound_idx = current_idx + 1; // inclusive
+        } else if (current_val == target_val) {
+            return current_idx;
+        } else {
+            upper_bound_idx = current_idx; // don't try this index
+        }
+
+        if (lower_bound_idx == upper_bound_idx) return lower_bound_idx;
+    }
+}
+
+pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []T, query_point: Pt) usize {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
+
+    assert(@hasField(T, "pt"));
+
+    // First we find the greatest lower bound (index)
+    const dim_idx = 0;
+    const glb_idx = greatestLowerBoundIndexGeneric(T, pts, dim_idx, query_point) catch 0;
+
+    var color: [4]u8 = undefined;
+
+    // Now we know where to start our search. Get the d_euclid to query_point,
+    // and search outwards along the sorted dimension. You can stop searching
+    // when the d_axis of current point > d_euclid_best.
+
+    var current_best_dist = dist(pts[glb_idx].pt, query_point);
+    var current_best_idx = glb_idx;
+    var idx_offset: u16 = 0;
+
+    // First search to the left.
+    while (true) {
+        const idx = glb_idx - idx_offset;
+        const current_pt = pts[idx].pt;
+        if (query_point[0] == 0.0855857804 and current_pt[0] == 0.0828876867) @breakpoint();
+        const d_axis = current_pt[dim_idx] - query_point[dim_idx];
+        if (d_axis < -current_best_dist) break;
+        const d_euclid = dist(current_pt, query_point);
+        // WARNING: TODO: make all nn methods consistent when multiple points
+        // have the same distance.
+
+        color = .{ 255, 255, 0, 255 };
+
+        if (d_euclid < current_best_dist) {
+            current_best_dist = d_euclid;
+            current_best_idx = idx;
+            color = .{ 0, 255, 255, 255 };
+        }
+
+        if (running_as_main_use_sdl) {
+            im.drawLineInBounds(
+                [4]u8,
+                win.pix,
+                @floatToInt(i32, query_point[0] * 750 + 25),
+                @floatToInt(i32, query_point[1] * 750 + 25),
+                @floatToInt(i32, current_pt[0] * 750 + 25),
+                @floatToInt(i32, current_pt[1] * 750 + 25),
+                color,
+            );
+            win.awaitKeyPressAndUpdateWindow();
+        }
+
+        if (idx == 0) break;
+        idx_offset += 1;
+    }
+
+    idx_offset = 0;
+
+    // Then search to the right.
+
+    while (true) {
+        const idx = glb_idx + idx_offset;
+        if (idx == pts.len) break;
+        const current_pt = pts[idx].pt;
+        const d_axis = current_pt[dim_idx] - query_point[dim_idx];
+
+        if (d_axis > current_best_dist) {
+            break;
+        }
+
+        color = .{ 255, 255, 0, 255 };
+        const d_euclid = dist(current_pt, query_point);
+        if (d_euclid < current_best_dist) {
+            current_best_dist = d_euclid;
+            current_best_idx = idx;
+            color = .{ 0, 255, 255, 255 };
+        }
+
+        if (running_as_main_use_sdl) {
+            im.drawLineInBounds(
+                [4]u8,
+                win.pix,
+                @floatToInt(i32, query_point[0] * 750 + 25),
+                @floatToInt(i32, query_point[1] * 750 + 25),
+                @floatToInt(i32, current_pt[0] * 750 + 25),
+                @floatToInt(i32, current_pt[1] * 750 + 25),
+                color,
+            );
+
+            win.awaitKeyPressAndUpdateWindow();
+        }
+
+        idx_offset += 1;
+    }
+
+    return current_best_idx;
+    // return pts[current_best_idx];
+    // return .{ .pt = pts[current_best_idx], .dist = current_best_dist };
+}
+
 pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
