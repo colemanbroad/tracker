@@ -77,22 +77,14 @@ pub fn build(b: *Builder) void {
     addSDL(exe_tracker);
     b.installArtifact(exe_tracker);
 
-    const test_tracker = b.addTest(.{
-        .name = "test-tracker",
-        .root_source_file = .{ .path = "src/tracker.zig" },
-        .filter = "generateTracking",
-    });
-    addSDL(test_tracker);
-    // test_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
-    b.installArtifact(test_tracker);
-
-    const test_tree2d = b.addExecutable(.{
-        .name = "test-tree2d",
-        .root_source_file = .{ .path = "src/ok2DTree.zig" },
-        .optimize = .Debug,
-    });
-    addSDL(test_tree2d);
-    b.installArtifact(test_tree2d);
+    // const test_tracker = b.addTest(.{
+    //     .name = "test-tracker",
+    //     .root_source_file = .{ .path = "src/tracker.zig" },
+    //     .filter = "generateTracking",
+    // });
+    // addSDL(test_tracker);
+    // // test_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
+    // b.installArtifact(test_tracker);
 
     const kdtree2d = b.addExecutable(.{
         .name = "exe-kdtree2d",
@@ -106,18 +98,6 @@ pub fn build(b: *Builder) void {
     // kdtree2d.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     // try addTracy(b, kdtree2d);
     b.installArtifact(kdtree2d);
-
-    const sdl_sdltest = b.addExecutable(.{ .name = "sdl-sdltest", .root_source_file = .{ .path = "src/sdltest.c" } });
-    addSDL(sdl_sdltest);
-    b.installArtifact(sdl_sdltest);
-
-    const sdl_sdltest2 = b.addExecutable(.{ .name = "sdl-01_hello_SDL", .root_source_file = .{ .path = "src/01_hello_SDL.cpp" } });
-    addSDL(sdl_sdltest2);
-    b.installArtifact(sdl_sdltest2);
-
-    // const test_basic = b.addTest(.{ .name = "test-basic", .root_source_file = .{ .path = "src/testBasic.zig" } });
-    // test_basic.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
-    // b.installArtifact(test_basic);
 
     // const run_basic = b.addRunArtifact(test_basic);
     // b.step("run-basic", "Run the test-basic suite.").dependOn(&run_basic.step);

@@ -280,6 +280,20 @@ pub fn drawLine(comptime T: type, img: Img2D(T), _x0: u31, _y0: u31, x1: u31, y1
 }
 
 pub fn drawLineInBounds(comptime T: type, img: Img2D(T), _x0: i32, _y0: i32, x1: i32, y1: i32, val: T) void {
+    drawLineInBounds2([4]u8, img, _x0, _y0, x1, y1, val);
+    drawLineInBounds2([4]u8, img, _x0 + 1, _y0, x1 + 1, y1, val);
+    drawLineInBounds2([4]u8, img, _x0, _y0 + 1, x1, y1 + 1, val);
+}
+
+fn blend(v1: [4]u8, v2: [4]u8) [4]u8 {
+    return .{
+        v1[0] / 2 + v2[0] / 2,
+        v1[1] / 2 + v2[1] / 2,
+        v1[2] / 2 + v2[2] / 2,
+        v1[3] / 2 + v2[3] / 2,
+    };
+}
+pub fn drawLineInBounds2(comptime T: type, img: Img2D(T), _x0: i32, _y0: i32, x1: i32, y1: i32, val: T) void {
     var x0 = _x0;
     var y0 = _y0;
     const dx = myabs(x1 - x0);
@@ -292,7 +306,7 @@ pub fn drawLineInBounds(comptime T: type, img: Img2D(T), _x0: i32, _y0: i32, x1:
     while (true) {
         if (inbounds(img, .{ x0, y0 })) {
             const idx = @intCast(u32, x0) + img.nx * @intCast(u32, y0);
-            img.img[idx] = val;
+            img.img[idx] = val; // blend(img.img[idx], val);
         }
         e2 = 2 * err;
         if (e2 >= dy) {
@@ -315,7 +329,8 @@ test "test imageBase. draw a simple yellow line" {
     try saveRGBA(pic, test_home ++ "testeroo.tga");
 }
 
-pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, r: i32, val: T) void {
+pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, _r: i32, val: T) void {
+    const r = 2 * _r;
     var idx: i32 = 0;
     while (idx < 4 * r * r) : (idx += 1) {
         const dx = @mod(idx, 2 * r) - r;
@@ -324,7 +339,7 @@ pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, r: i32, val
         const y = y0 + dy;
         if (inbounds(pic, .{ x, y }) and dx * dx + dy * dy <= r * r) {
             const imgigx = @intCast(u31, x) + pic.nx * @intCast(u31, y);
-            pic.img[imgigx] = val;
+            pic.img[imgigx] = blend(pic.img[imgigx], val);
         }
     }
 }

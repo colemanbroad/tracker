@@ -509,7 +509,7 @@ test "test greatestLowerBoundIndex" {
 
 const assert = std.debug.assert;
 
-pub fn greatestLowerBoundIndexGeneric(comptime T: type, pts: []T, dim: u8, query_point: Pt) !usize {
+pub fn greatestLowerBoundIndexGeneric(comptime T: type, pts: []const T, dim: u8, query_point: Pt) !usize {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
 
@@ -544,7 +544,7 @@ pub fn greatestLowerBoundIndexGeneric(comptime T: type, pts: []T, dim: u8, query
     }
 }
 
-pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []T, query_point: Pt) usize {
+pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []const T, query_point: Pt) usize {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
 
