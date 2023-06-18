@@ -22,12 +22,15 @@
 -[x] Evaluate actual tracking performance
 -[x] replace O(n^2)-space container for temporal edges
 -[x] fast spatial nn data struct. grid hash / KDTree / other
+    -[ ] add index fields to KD Tree struct
+    -[ ] `findNearestNeibFromSortedList()` should first bin by Y then sort by X. 
+
+
 
 -[ ] Implement the scoring functions in Zig.
 -[ ] Implement a Tracking type and a DetectionTimeseries type.
 -[ ] Figure out how to move more complex types across the Zig / Python boundary.
 -[ ] Fast, brute force search of tracking solutions with brute force search.
-
 
 -[x] Tracy profiling
 -[x] XCode Instruments Profiling
@@ -210,7 +213,7 @@ Then when building the local project you have to do `addTracy(b,exe)` to add opt
 
 I've stashed a commit in the tracy repo that shows how to build on M1 mac. I should really have made a branch...
 
-NOTE: Fix the size issue with `export TRACY_DPI_SCALE=1.0`
+NOTE: Fix the size issue with `export TRACY_DPI_SCALE=1.0` see [here](https://github.com/wolfpld/tracy/issues/513)
 
 OK I'm just about fed up with macos... Tracy works at random. I've managed to make it segfault my application whenever I run a .Debug build. Then when I ran a .RelaseFast it would ignore 1/3 or 1/4 of my tracing annotations! But at least these timings looks reasonable... Only 120ns / point with 10k particles?
 
@@ -239,7 +242,7 @@ But unfortunately it smooshes everything together in a call tree when we really 
 Maybe the best way to profile is just to do it from the command line....
 `/usr/bin/time -l zig-binary`
 OK I'm using hyperfine and this also works. Although it's cumbersome...
-But now I need to remove the infinite loop    
+But now I need to remove the infinite loop
 
 NOTE: The ERRORs I found below are cases where the distance is exactly equal, i think.
 
@@ -311,7 +314,40 @@ think there's a significant error on each timestamp. Maybe about 40ns ? I
 wonder if this error exists in Tracy's timings ?
 
 
+Storing the points sorted by X removes grid spacing param, and is a dense
+representation, obviates grid cell to point index mapping or the
+inline-storage with gaps idea.
 
+```zig
+const a = struct {a: f32, b:u8};
+```
+
+## Improving the custom tracer
+
+In a perfect world I'd be able to get Tracy to work on macos. But in an even perfecter world
+I'd have custom profiling tools that I could use for summarizing and profiling functions with
+nanosecond (instruction count?) precision and full control. 
+
+
+# Removing python
+
+Calling zig tracking functions from python allows me to integrate into existing CPNet code for tracking, 
+as well as the ISBI Tracking GT experiments that I've already performed. However, it might be easier to 
+move those tracking solutions over to zig than to maintain two separate worlds... I could use python for
+loading TIFFs and export point set and tracking data for each GT dataset... or build my own in zig... 
+
+This would require 
+-[ ] extracting centerpoints from TIFFs
+-[ ] extracting linking information from `man_track.txt`
+-[ ] implement DET/TRA tracking comparisons in zig on the new zig `Tracking` type
+-[ ] make `Tracking` type generic over 2D / 3D. 
+
+Benefits
+- Put all the linking methods into one codebase which can grow to include any linking approach we can imagine.
+- Make a shared library where these methods are easy to call from any other codebase.
+- Make all algorithms easy to visualize (and debug).
+- Integrate linking with a UI for curating and editing tracks, including in 3D.
+- Trains my low-level and algorithmic coding skills.
 
 
 

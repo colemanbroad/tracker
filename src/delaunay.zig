@@ -293,6 +293,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
                 }
             }
         }
+
         // edges that occur once are added to polyedges
         var it = edge_label.iterator();
         while (it.next()) |kv| {

@@ -1,6 +1,10 @@
 const std = @import("std");
 const print = std.debug.print;
 
+// var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+// const alloc = gpa.allocator();
+const alloc = std.heap.page_allocator;
+
 fn print2(
     comptime src_info: std.builtin.SourceLocation,
     comptime fmt: []const u8,
@@ -12,7 +16,6 @@ fn print2(
 }
 
 test "resize a slice" {
-    const alloc = std.testing.allocator;
     var pts = try alloc.alloc(f32, 100);
     defer alloc.free(pts);
     const failed = alloc.resize(pts, pts.len + 1);
@@ -20,7 +23,6 @@ test "resize a slice" {
 }
 
 test "resize many times" {
-    const alloc = std.testing.allocator;
     var count: u32 = 100;
     while (count < 10000) : (count += 100) {
         var pts = try alloc.alloc([2]f32, count);
@@ -46,7 +48,6 @@ test "resize many times" {
 }
 
 fn testresize(pts: [][2]f32) !void {
-    const alloc = std.testing.allocator;
     _ = alloc.resize(pts, pts.len + 3);
     defer _ = alloc.resize(pts, pts.len - 3);
     pts[pts.len - 3] = .{ 1, 0 };
@@ -84,4 +85,46 @@ test "float cast on @Vector" {
     _ = x;
     // _ = @intToFloat(P, x); // Compile Error
     // _ = y;
+}
+
+export fn add(a: i32, b: i32) i32 {
+    return a + b;
+}
+export fn sum(a: [*]i32, n: u32) i32 {
+    var tot: i32 = 0;
+    var i: u32 = 0;
+    while (i < n) {
+        tot += a[i];
+        i += 1;
+        // print("Print {} me {} you fool!\n", .{tot,i});
+    }
+    return tot;
+}
+
+// Waits for user input on the command line. "Enter" sends input.
+fn awaitCmdLineInput() !i64 {
+    if (@import("builtin").is_test) return 0;
+
+    const stdin = std.io.getStdIn().reader();
+    const stdout = std.io.getStdOut().writer();
+
+    var buf: [10]u8 = undefined;
+
+    try stdout.print("Press 0 to quit: ", .{});
+
+    if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
+        const res = std.fmt.parseInt(i64, user_input, 10) catch return 1;
+        if (res == 0) return 0;
+    }
+    return 1;
+}
+
+// Zig doesn't have tuple-of-types i.e. product types yet so all fields must be named. This is probably good.
+// https://github.com/ziglang/zig/issues/4335
+
+// Yes they do now!!
+test "tuple of types exists ?" {
+    const T = struct { u16, u8, bool };
+    const t1 = T{ 14, 255, true };
+    _ = t1;
 }
