@@ -1,28 +1,26 @@
-// HOWTO: load 'lib.a' ?
-// const del = @import("/Users/broaddus/Desktop/projects-personal/zig/zig-opencl-test/src/libdelaunay.a");
-
 const std = @import("std");
-const im = @import("image_base.zig");
-const geo = @import("geometry.zig");
-const del = @import("delaunay.zig");
-
-// const trace = @import("trace");
-// pub const enable_trace = true; // must be enabled otherwise traces will be no-ops
-
-const drawCircle = im.drawCircle;
-const drawLineInBounds = im.drawLineInBounds;
-
-const PriorityQueue = std.PriorityQueue;
 const Allocator = std.mem.Allocator;
 const print = std.debug.print;
 const assert = std.debug.assert;
-const random = prng.random();
-var prng = std.rand.DefaultPrng.init(0);
-
 const min = std.math.min;
 const max = std.math.max;
 
+var prng = std.rand.DefaultPrng.init(0);
+const random = prng.random();
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+
+// Local imports
+const im = @import("image_base.zig");
+const Tracer = @import("fn-tracer.zig").Tracer;
+var tracer: Tracer(100) = undefined;
+// Get an SDL window we can use for visualizing algorithms.
+const sdlw = @import("sdl-window.zig");
+var win: ?sdlw.Window = null;
 const nn_tools = @import("kdtree2d.zig");
+
+const Pt3D = [3]f32;
+const Pt = [2]f32;
 
 pub fn log(
     comptime message_level: std.log.Level,
@@ -42,17 +40,18 @@ pub fn log(
     logfile.close();
 }
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = gpa.allocator();
-// var allocator = std.testing.allocator; //(.{}){};
-
-const Pts3 = [3]f32;
-const Pts = geo.Vec2;
-
 // const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/track/";
 // test {
 //     // std.testing.refAllDecls(@This());
 // }
+
+fn distEuclid(comptime T: type, x: T, y: T) f32 {
+    return switch (T) {
+        Pt => (x[0] - y[0]) * (x[0] - y[0]) + (x[1] - y[1]) * (x[1] - y[1]),
+        Pt3D => (x[0] - y[0]) * (x[0] - y[0]) + (x[1] - y[1]) * (x[1] - y[1]) + (x[2] - y[2]) * (x[2] - y[2]),
+        else => unreachable,
+    };
+}
 
 // Runs assignment over each consecutive pair of pointclouds in time order.
 pub fn trackOverFramePairs(tracking: Tracking2D) !void {
@@ -84,50 +83,56 @@ pub fn trackOverFramePairs(tracking: Tracking2D) !void {
         const trackslice_curr = tracking.items[t0_end..t1_end];
 
         // Clear the screen. Draw prev pts in green, curr pts in blue.
-        for (win.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
-        for (trackslice_prev) |p| {
-            const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-            const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-            // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
-            im.drawCircle([4]u8, win.pix, x, y, 3, .{ 0, 255, 0, 255 });
-        }
-        for (trackslice_curr) |p| {
-            const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-            const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-            // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
-            im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 0, 0, 255 });
+        if (win) |w| {
+            for (w.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+            for (trackslice_prev) |p| {
+                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
+                im.drawCircle([4]u8, w.pix, x, y, 3, .{ 0, 255, 0, 255 });
+            }
+            for (trackslice_curr) |p| {
+                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
+                im.drawCircle([4]u8, w.pix, x, y, 3, .{ 255, 0, 0, 255 });
+            }
         }
 
         // try connectFramesGreedyDumb(trackslice_prev, trackslice_curr);
         try connectFramesGreedy(trackslice_prev, trackslice_curr);
 
         // Draw teal lines showing connections
-        for (trackslice_curr) |*p| {
-            if (p.parent_id) |pid| {
-                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                const parent = tracking.getID(pid).?;
-                const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
-                const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
-                im.drawLineInBounds([4]u8, win.pix, x, y, x2, y2, .{ 255, 255, 0, 255 });
+        if (win) |w| {
+            for (trackslice_curr) |*p| {
+                if (p.parent_id) |pid| {
+                    const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+                    const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                    const parent = tracking.getID(pid).?;
+                    const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
+                    const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
+                    im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, .{ 255, 255, 0, 255 });
+                }
             }
         }
 
         try connectFramesNearestNeib(trackslice_prev, trackslice_curr);
 
         // Draw red lines for connections
-        for (trackslice_curr) |*p| {
-            if (p.parent_id) |pid| {
-                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                const parent = tracking.getID(pid).?;
-                const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
-                const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
-                im.drawLineInBounds([4]u8, win.pix, x, y, x2, y2, .{ 0, 0, 255, 255 });
+        if (win) |*w| {
+            for (trackslice_curr) |*p| {
+                if (p.parent_id) |pid| {
+                    const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+                    const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                    const parent = tracking.getID(pid).?;
+                    const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
+                    const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
+                    im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, .{ 0, 0, 255, 255 });
+                }
             }
-        }
 
-        win.awaitKeyPressAndUpdateWindow();
+            w.awaitKeyPressAndUpdateWindow();
+        }
     }
 }
 
@@ -142,8 +147,8 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
     for (a, 0..) |x, i| {
         for (b, 0..) |y, j| {
             switch (T) {
-                Pts => cost[i * nb + j] = dist(Pts, x, y),
-                TrackedCell => cost[i * nb + j] = dist(Pts, x.pt, y.pt),
+                Pt => cost[i * nb + j] = distEuclid(Pt, x, y),
+                TrackedCell => cost[i * nb + j] = distEuclid(Pt, x.pt, y.pt),
                 else => unreachable,
             }
         }
@@ -152,17 +157,12 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
     return cost;
 }
 
-fn dist(comptime T: type, x: T, y: T) f32 {
-    return switch (T) {
-        Pts => (x[0] - y[0]) * (x[0] - y[0]) + (x[1] - y[1]) * (x[1] - y[1]),
-        Pts3 => (x[0] - y[0]) * (x[0] - y[0]) + (x[1] - y[1]) * (x[1] - y[1]) + (x[2] - y[2]) * (x[2] - y[2]),
-        else => unreachable,
-    };
-}
-
 // Put all edges between two frames into a PriorityQueue and add them to the solution greedily,
-// but without violating constraints.
+// without violating constraints.
 pub fn connectFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
+
     const va = trackslice_prev;
     const vb = trackslice_curr;
     const na = va.len;
@@ -194,7 +194,7 @@ pub fn connectFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr
     }.lt;
 
     // Place costs into priority queue
-    var edgeQ = PriorityQueue(CostEdgePair, void, lt).init(allocator, {});
+    var edgeQ = std.PriorityQueue(CostEdgePair, void, lt).init(allocator, {});
     defer edgeQ.deinit();
     for (cost, 0..) |c, i| {
         const ia = i / nb;
@@ -234,6 +234,8 @@ pub fn connectFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr
 // nearest parent in the previous frame. Ignore all constraints on the number
 // of children a cell can have! Don't look at any other costs bust Euclidean distance.
 pub fn connectFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
     // Make the connection using fast nearest neib lookup.
     for (trackslice_curr) |*p| {
         const parent_idx = nn_tools.findNearestNeibFromSortedListGeneric(TrackedCell, trackslice_prev, p.pt);
@@ -242,8 +244,11 @@ pub fn connectFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice
     }
 }
 
-// Assign cells to parents greedily, picking the best assignments first.
+// Assign cells to parents greedily, picking the best parents first, but iterating
+// over cells in a random order.
 pub fn connectFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
     // keep track of the number of children map to a given parent
     var has_n_children = try allocator.alloc(u3, trackslice_prev.len);
     for (has_n_children) |*v| v.* = 0;
@@ -256,7 +261,7 @@ pub fn connectFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_
 
         // iterate over all possible parents and find the best one (lowest score, still available)
         for (trackslice_prev, 0..) |p0, i| {
-            const d = dist(@TypeOf(p.pt), p.pt, p0.pt);
+            const d = distEuclid(@TypeOf(p.pt), p.pt, p0.pt);
             // if the parent is not available, then skip.
             if (has_n_children[i] >= 2) continue;
             // if the parent is available and best is not null, but the distance isn't the best, then skip.
@@ -274,7 +279,7 @@ pub fn connectFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_
     }
 }
 
-const TrackedCell = struct { pt: Pts, id: u32, time: u16, parent_id: ?u32 };
+const TrackedCell = struct { pt: Pt, id: u32, time: u16, parent_id: ?u32 };
 
 const Tracking2D = struct {
     items: []TrackedCell,
@@ -341,11 +346,7 @@ const Tracking2D = struct {
     // TODO: getIDfromCompactSorted() // const time direct access
 };
 
-// Get an SDL window we can use for visualizing algorithms.
-const sdlw = @import("sdl-window.zig");
-var win: sdlw.Window = undefined;
-
-pub fn pt2screen(p: Pts) [2]i32 {
+pub fn pt2screen(p: Pt) [2]i32 {
     const x = @floatToInt(i32, p[0] * 750 + 25);
     const y = @floatToInt(i32, p[1] * 750 + 25);
     return .{ x, y };
@@ -354,15 +355,19 @@ pub fn pt2screen(p: Pts) [2]i32 {
 pub fn main() !void {
     try sdlw.initSDL();
     defer sdlw.quitSDL();
-    win = try sdlw.Window.init(1000, 800);
+    // win = try sdlw.Window.init(1000, 800);
+
+    tracer = try Tracer(100).init();
 
     var tracking = try generateTrackingLineage(allocator, 1000);
     defer allocator.free(tracking.items);
 
     try trackOverFramePairs(tracking);
+
+    try tracer.analyze(allocator);
 }
 
-// Includes divisions and cell death
+// Generate a simulated lineage with cells, divisions and apoptosis.
 pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
     var tracking = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
     var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, 100);
