@@ -98,7 +98,7 @@ Can we sub-class AutoHashMap and override the `put` and `get` methods ?
 each module should have separate log destination ? and an extra that's unified?
 
 
-# fast spatial nn data struct. grid hash.
+# Fast spatial NN data structures
 
 Sep 22 2022
 - `tri_trid.zig`, `grid_hash2.zig`, `grid_hash.zig` cleanup
@@ -349,6 +349,49 @@ Benefits
 - Integrate linking with a UI for curating and editing tracks, including in 3D.
 - Trains my low-level and algorithmic coding skills.
 
+# Implementing min-cost greedy-assignment linking with division-costs
 
+The general idea is that we re-evaluate some (all?) of the assignment costs after each assignment. In particular this allows us to make the second assignment to a parent more expensive by adding a (fixed?) extra cost making translation preferable to division unless the benefit outways the added cost. 
+
+We could achieve this particular goal by simply iterating in a different way. By iterating over parents and assigning the closest child (within a threshold) we reduce false divisions. Then once each parent has an assignment we iterate over the remaining children and assign them to the nearest parent (also within a threshold). _This is probably a better heuristic than the standard nearest-parent approach!_ And it doesn't require anything really fancy.
+
+It probably makes sense to pick the shortest edges first in an edgeQ.
+
+```
+Edge = struct{v1,v2,cost}
+alledges : []Edge = compute-all-edgecosts(vs0,vs1)
+for e in alledges: Q.add(e).sortby(Edge.cost)
+
+ps = set(parents)
+
+// This doesn't work because a parent may have no
+loop {
+    e = Q.pop-smallest()
+    if e.parent.children = [] {
+        e.parent.children = [e.child]
+        ps.remove(e.parent)
+    }
+    if ps.empty(): break
+}
+
+
+For each parent find it's cheapest child.
+Order by cost.
+Assign parent to child if that child hasn't been assigned yet.
+If it has, then find the next cheapest.
+
+loop {
+    if (not all-parents-assigned) {
+        assign unassigned-parent to nearest child or EXIT
+    } else {
+        assign unassigned-child to nearest parent or ENTRY
+    }
+}
+
+```
+
+
+
+iterating over children and assigning each to the nearest parent
 
 

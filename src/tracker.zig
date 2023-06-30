@@ -83,56 +83,47 @@ pub fn trackOverFramePairs(tracking: Tracking2D) !void {
         const trackslice_curr = tracking.items[t0_end..t1_end];
 
         // Clear the screen. Draw prev pts in green, curr pts in blue.
-        if (win) |w| {
-            for (w.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
-            for (trackslice_prev) |p| {
-                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
-                im.drawCircle([4]u8, w.pix, x, y, 3, .{ 0, 255, 0, 255 });
-            }
-            for (trackslice_curr) |p| {
-                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
-                im.drawCircle([4]u8, w.pix, x, y, 3, .{ 255, 0, 0, 255 });
-            }
-        }
+        drawPts(trackslice_prev, .{ 0, 255, 0, 255 });
+        drawPts(trackslice_curr, .{ 255, 0, 0, 255 });
 
         // try connectFramesGreedyDumb(trackslice_prev, trackslice_curr);
         try connectFramesGreedy(trackslice_prev, trackslice_curr);
 
         // Draw teal lines showing connections
-        if (win) |w| {
-            for (trackslice_curr) |*p| {
-                if (p.parent_id) |pid| {
-                    const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                    const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                    const parent = tracking.getID(pid).?;
-                    const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
-                    const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
-                    im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, .{ 255, 255, 0, 255 });
-                }
-            }
-        }
+        drawLinks(trackslice_curr, tracking, .{ 255, 255, 0, 255 });
 
         try connectFramesNearestNeib(trackslice_prev, trackslice_curr);
 
         // Draw red lines for connections
-        if (win) |*w| {
-            for (trackslice_curr) |*p| {
-                if (p.parent_id) |pid| {
-                    const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                    const y = @floatToInt(i32, p.pt[1] * 750 + 25);
-                    const parent = tracking.getID(pid).?;
-                    const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
-                    const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
-                    im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, .{ 0, 0, 255, 255 });
-                }
-            }
+        drawLinks(trackslice_curr, tracking, .{ 0, 0, 255, 255 });
+    }
+}
 
-            w.awaitKeyPressAndUpdateWindow();
+pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
+    if (win) |w| {
+        for (w.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+        for (trackslice) |p| {
+            const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+            const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+            // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
+            im.drawCircle([4]u8, w.pix, x, y, 3, color);
         }
+    }
+}
+
+pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking2D, color: [4]u8) void {
+    if (win) |*w| {
+        for (trackslice) |*p| {
+            if (p.parent_id) |pid| {
+                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
+                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                const parent = tracking.getID(pid).?;
+                const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
+                const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
+                im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, color);
+            }
+        }
+        w.awaitKeyPressAndUpdateWindow();
     }
 }
 
@@ -155,6 +146,86 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
     }
 
     return cost;
+}
+
+// Implementation of the Munkres Algorithm for optimal (minimal cost) linear
+// sum assignment, but specialized on cell tracking where
+// 1-2 assignment is possible. In fact 0-1, 1-0, 1-1, 1-2 assignments are all possible! They correspond to:
+// 0-1 A cell enters the field of view through e.g. an image boundary, or appears from previously undetected state.
+// 1-0 A cell dies or leaves through the image boundary.
+// 1-1 A cell moves through time uneventfully (the most common case).
+// 1-2 A cell divides into two daughters.
+// We rule out 1-3 assignments as unrealistic for common framerates.
+pub fn connectFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    _ = trackslice_curr;
+    _ = trackslice_prev;
+}
+
+// Alternative Greedy Linking where division costs are greater for the second child than
+// for the first. This is done by first
+pub fn connectFramesGreedy2(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    _ = trackslice_curr;
+    _ = trackslice_prev;
+}
+
+// Create an array of all considered edges, perhaps throwing away unlikelies.
+// Sort them based on cost(cell,cell).
+// Assign the cheapest edges first. Keep track of the number of in/out edges for each cell.
+// Don't assign edges that would violate constraints.
+// You can go through the edges in a single pass from cheapest to most expensive, because once
+// an edge becomes invalid it never becomes valid in the future. There is no backtracking!
+pub fn connectFramesGreedyFaster(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+    const tspan = tracer.start(@src().fn_name);
+    defer tspan.stop();
+
+    const na = trackslice_prev.len;
+    const nb = trackslice_curr.len;
+
+    // count number of out edges on A
+    var n_out_parent = try allocator.alloc(u8, na);
+    defer allocator.free(n_out_parent);
+    for (n_out_parent) |*v| v.* = 0;
+
+    // count number of in edges on B
+    var n_in_child = try allocator.alloc(u8, nb);
+    defer allocator.free(n_in_child);
+    for (n_in_child) |*v| v.* = 0;
+
+    // const cost = try pairwiseDistances(allocator, @TypeOf(va[0]), va, vb);
+    // const CostEdgePair = struct { cost: f32, parent: TrackedCell, child: TrackedCell };
+    const CostEdgePair = struct { cost: f32, idx_parent: usize, idx_child: usize };
+    const edges = try allocator.alloc(CostEdgePair, na * nb);
+    defer allocator.free(edges);
+
+    for (trackslice_prev, 0..na) |p, i| {
+        for (trackslice_curr, 0..nb) |c, j| {
+            edges[i * nb + j] = .{ .cost = distEuclid(Pt, p.pt, c.pt), .idx_parent = i, .idx_child = j };
+        }
+    }
+
+    const lt = struct {
+        fn lt(context: void, a: CostEdgePair, b: CostEdgePair) bool {
+            _ = context;
+            return a.cost < b.cost;
+        }
+    }.lt;
+
+    std.sort.heap(CostEdgePair, edges, {}, lt);
+
+    // Iterate only one time over the edges in increasing order of cost.
+    for (edges) |c| {
+
+        // If the parent already has two children or the child is already assigned, skip this edge
+        if (n_out_parent[c.idx_parent] == 2 or n_in_child[c.idx_child] == 1) continue;
+
+        if (c.cost > 100) continue;
+
+        // Make the assignment, then mark both the parent and child as assigned.
+        // TODO: we don't really need n_in_child because we can just check trackslice[c.idx_child].parent_id == null
+        trackslice_curr[c.idx_child].parent_id = trackslice_prev[c.idx_parent].id;
+        n_out_parent[c.idx_parent] += 1;
+        n_in_child[c.idx_child] += 1;
+    }
 }
 
 // Put all edges between two frames into a PriorityQueue and add them to the solution greedily,
