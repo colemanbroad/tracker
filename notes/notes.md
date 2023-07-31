@@ -351,11 +351,16 @@ Benefits
 
 # Implementing min-cost greedy-assignment linking with division-costs
 
-The general idea is that we re-evaluate some (all?) of the assignment costs after each assignment. In particular this allows us to make the second assignment to a parent more expensive by adding a (fixed?) extra cost making translation preferable to division unless the benefit outways the added cost. 
+The general idea is that we re-evaluate some (all?) of the assignment costs after each assignment. 
+In particular this allows us to make the second assignment to a parent more expensive by adding a (fixed?) extra cost making translation preferable to division unless the benefit outways the added cost. 
+
+Can we do this by iterating in a single pass from cheapest to most expensive?
+~~Yes, I think so.~~ No, we can't.
+Once an edge is assigned the added cost affects all proposed 2nd children.
+Only some fraction of the remaining edges will have their cost increased, and thus the iteration will be out of order.
+Will this matter? 
 
 We could achieve this particular goal by simply iterating in a different way. By iterating over parents and assigning the closest child (within a threshold) we reduce false divisions. Then once each parent has an assignment we iterate over the remaining children and assign them to the nearest parent (also within a threshold). _This is probably a better heuristic than the standard nearest-parent approach!_ And it doesn't require anything really fancy.
-
-It probably makes sense to pick the shortest edges first in an edgeQ.
 
 ```
 Edge = struct{v1,v2,cost}
@@ -390,8 +395,42 @@ loop {
 
 ```
 
-
-
 iterating over children and assigning each to the nearest parent
+
+# Mon Jul 10 23:40:18 2023 – From Callie's Appt
+
+If you have the same number of individual edge errors, but fewer connected errors for paths length>=2 then aren't you just pushing the errors around? 
+
+What mesh can we construct that looks like Delaunay but is easier to construct?
+- a. connect each node to all neibs within cutoff dist
+- b. connect each node to six nearest neibs
+- (a|b) but filtering out crossed edges by looking for 4-tuples that cross. 
+
+Q: Why is it bad to have crossed edges in the strain cost tracker mesh? And how did Dagmar and Florian determine their mesh?
+    Did Dagmar have a mesh ? Or did they avoid that issue? 
+A: They used k-nearest neibs! They didn't worry about crosses (also they were in 3D). 
+
+Q: How did Bjoern Andres write the ILP solver cell tracker? Is the code available ? 
+A: No code referenced in the paper! Also, their ILP solver is just for faster Moral Lineage Tracing!!! This is not the problem we have!
+
+Intuition behind unbiased estimator of variance (for Gaussian with unknown mean) [link](https://www.statlect.com/fundamentals-of-statistics/variance-estimation#:~:text=Intuitively%2C%20by%20considering%20squared%20deviations%20from%20the%20sample%20mean%20rather%20than%20squared%20deviations%20from%20the%20true%20mean%2C%20we%20are%20underestimating%20the%20true%20variability%20of%20the%20data.). 
+
+# Bjoern Andres' paper on Moral Lineage Tracing optimization
+
+They propose a few moves that one can make to an existing solution (tracking graph) (arboresence?) without violating any constraints.
+One of those moves is MLT specific - coalescing multiple detections into one. They also reference [Kernhigan Lin updates](KL) which they use to improve
+the greedy solution between frame pairs? 
+
+
+
+
+
+
+[KL]: W. Kernighan and S. Lin. An efficient heuristic proce- dure for partitioning graphs. Bell system technical journal
+
+
+
+
+
 
 

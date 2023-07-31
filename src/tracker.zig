@@ -45,6 +45,91 @@ pub fn log(
 //     // std.testing.refAllDecls(@This());
 // }
 
+// procedure generate(n : integer, A : array of any):
+//     // c is an encoding of the stack state. c[k] encodes the for-loop counter for when generate(k - 1, A) is called
+//     c : array of int
+
+//     for i := 0; i < n; i += 1 do
+//         c[i] := 0
+//     end for
+
+//     output(A)
+
+//     // i acts similarly to a stack pointer
+//     i := 1;
+//     while i < n do
+//         if  c[i] < i then
+//             if i is even then
+//                 swap(A[0], A[i])
+//             else
+//                 swap(A[c[i]], A[i])
+//             end if
+//             output(A)
+//             // Swap has occurred ending the for-loop. Simulate the increment of the for-loop counter
+//             c[i] += 1
+//             // Simulate recursive call reaching the base case by bringing the pointer to the base case analog in the array
+//             i := 1
+//         else
+//             // Calling generate(i+1, A) has ended as the for-loop terminated. Reset the state and simulate popping the stack by incrementing the pointer.
+//             c[i] := 0
+//             i += 1
+//         end if
+//     end while
+
+// Robert Sedgewick's non-recursive permutation algorithm
+// https://sedgewick.io/wp-content/uploads/2022/03/2002PermGeneration.pdf
+//   from https://en.wikipedia.org/wiki/Heap%27s_algorithm?useskin=vector
+// The implementation derives directly from the recursive one, but uses an explicit
+// stack counter (c) instead of an implicit one. The idea is that we can recursively
+// define a permutation p(n) as n * p(n-1) i.e. p(x) = for i=0..x.len {swap(0,i); perm()}
+//
+fn enumeratePermutations(arr: []u32) !void {
+    var count: u32 = 0;
+
+    const n = arr.len;
+    var c = try allocator.alloc(u32, n);
+    for (c) |*x| x.* = 0;
+
+    print("{d:10} == {d} \n", .{ count, arr });
+    count += 1;
+
+    var i: u32 = 0;
+    // i is the index into c. arr.len = c.len = n.
+    while (i < n) {
+        if (c[i] < i) {
+            if (i % 2 == 0) {
+                // swap 0 , i
+                const tmp = arr[0];
+                arr[0] = arr[i];
+                arr[i] = tmp;
+            } else {
+                // swap c[i] , i
+                const tmp = arr[c[i]];
+                arr[c[i]] = arr[i];
+                arr[i] = tmp;
+            }
+
+            print("{d:10} == {d} \n", .{ count, arr });
+            count += 1;
+
+            c[i] += 1;
+            i = 1;
+        } else {
+            c[i] = 0;
+            i += 1;
+        }
+    }
+}
+
+test "test enumeratePermutations" {
+    print("\n", .{});
+    const n: u32 = 9;
+    var arr = try allocator.alloc(u32, n);
+    for (arr, 0..) |*a, i| a.* = @intCast(u32, i);
+
+    try enumeratePermutations(arr);
+}
+
 fn distEuclid(comptime T: type, x: T, y: T) f32 {
     return switch (T) {
         Pt => (x[0] - y[0]) * (x[0] - y[0]) + (x[1] - y[1]) * (x[1] - y[1]),
@@ -86,16 +171,17 @@ pub fn trackOverFramePairs(tracking: Tracking2D) !void {
         drawPts(trackslice_prev, .{ 0, 255, 0, 255 });
         drawPts(trackslice_curr, .{ 255, 0, 0, 255 });
 
-        // try connectFramesGreedyDumb(trackslice_prev, trackslice_curr);
-        try connectFramesGreedy(trackslice_prev, trackslice_curr);
+        // try linkFramesGreedyDumb(trackslice_prev, trackslice_curr);
+        // try linkFramesGreedy(trackslice_prev, trackslice_curr);
+        try linkFramesMunkes(trackslice_prev, trackslice_curr);
 
-        // Draw teal lines showing connections
+        // Draw teal lines showing connectionsn
         drawLinks(trackslice_curr, tracking, .{ 255, 255, 0, 255 });
 
-        try connectFramesNearestNeib(trackslice_prev, trackslice_curr);
+        // try linkFramesNearestNeib(trackslice_prev, trackslice_curr);
 
-        // Draw red lines for connections
-        drawLinks(trackslice_curr, tracking, .{ 0, 0, 255, 255 });
+        // // Draw red lines for connections
+        // drawLinks(trackslice_curr, tracking, .{ 0, 0, 255, 255 });
     }
 }
 
@@ -156,14 +242,73 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
 // 1-1 A cell moves through time uneventfully (the most common case).
 // 1-2 A cell divides into two daughters.
 // We rule out 1-3 assignments as unrealistic for common framerates.
-pub fn connectFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
-    _ = trackslice_curr;
-    _ = trackslice_prev;
+// Implementation from [duke](https://users.cs.duke.edu/~brd/Teaching/Bio/asmb/current/Handouts/munkres.html)
+pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+
+    // First we have to make an nxn grid of edge costs
+    // Then an nxn grid of algorithm state for each edge
+
+    // @breakpoint();
+
+    const n = trackslice_prev.len;
+    const m = trackslice_curr.len;
+    // const k = @min()
+
+    var link_costs = try allocator.alloc(f32, n * m);
+    defer allocator.free(link_costs);
+
+    // Generate costs
+    for (trackslice_prev, 0..) |v1, i| {
+        for (trackslice_curr, 0..) |v2, j| {
+            link_costs[i * m + j] = distEuclid(Pt, v1.pt, v2.pt);
+        }
+    }
+
+    var min_cost_prev = try allocator.alloc(f32, n);
+    defer allocator.free(min_cost_prev);
+    var min_cost_curr = try allocator.alloc(f32, m);
+    defer allocator.free(min_cost_curr);
+
+    // initialize with smallest possible value (cost must be >= 0)
+    for (min_cost_prev) |*c| c.* = 0;
+    for (min_cost_curr) |*c| c.* = 0;
+
+    // Find the min cost for rows and columns
+    for (trackslice_prev, 0..) |_, i| {
+        for (trackslice_curr, 0..) |_, j| {
+            const l = link_costs[i * m + j];
+            if (l < min_cost_prev[i]) min_cost_prev[i] = l;
+            if (l < min_cost_curr[j]) min_cost_curr[j] = l;
+        }
+    }
+
+    // Subtract the min across `prev` from each `curr`
+    for (trackslice_prev, 0..) |_, i| {
+        for (trackslice_curr, 0..) |_, j| {
+            link_costs[i * m + j] -= min_cost_prev[i];
+        }
+    }
+
+    const LinkState = enum { covered, uncovered, starred };
+
+    // Everything starts off uncovered
+    var link_state = try allocator.alloc(LinkState, n * m);
+    defer allocator.free(link_state);
+    for (trackslice_prev, 0..) |_, i| {
+        for (trackslice_curr, 0..) |_, j| {
+            link_state[i * m + j] = .uncovered;
+        }
+    }
+
+    // Then we iterate over the edges.
+    // Find the cheapest unassigned edge.
 }
+
+test "test the munkres tracker" {}
 
 // Alternative Greedy Linking where division costs are greater for the second child than
 // for the first. This is done by first
-pub fn connectFramesGreedy2(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+pub fn linkFramesGreedy2(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     _ = trackslice_curr;
     _ = trackslice_prev;
 }
@@ -174,7 +319,7 @@ pub fn connectFramesGreedy2(trackslice_prev: []const TrackedCell, trackslice_cur
 // Don't assign edges that would violate constraints.
 // You can go through the edges in a single pass from cheapest to most expensive, because once
 // an edge becomes invalid it never becomes valid in the future. There is no backtracking!
-pub fn connectFramesGreedyFaster(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+pub fn linkFramesGreedyFaster(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
 
@@ -230,7 +375,7 @@ pub fn connectFramesGreedyFaster(trackslice_prev: []const TrackedCell, trackslic
 
 // Put all edges between two frames into a PriorityQueue and add them to the solution greedily,
 // without violating constraints.
-pub fn connectFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+pub fn linkFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
 
@@ -304,7 +449,7 @@ pub fn connectFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr
 // Iterate over consecutive timepoints in Tracking and connect points to
 // nearest parent in the previous frame. Ignore all constraints on the number
 // of children a cell can have! Don't look at any other costs bust Euclidean distance.
-pub fn connectFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+pub fn linkFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
     // Make the connection using fast nearest neib lookup.
@@ -317,7 +462,7 @@ pub fn connectFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice
 
 // Assign cells to parents greedily, picking the best parents first, but iterating
 // over cells in a random order.
-pub fn connectFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+pub fn linkFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
     // keep track of the number of children map to a given parent
