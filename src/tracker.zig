@@ -125,7 +125,7 @@ test "test enumeratePermutations" {
     print("\n", .{});
     const n: u32 = 9;
     var arr = try allocator.alloc(u32, n);
-    for (arr, 0..) |*a, i| a.* = @intCast(u32, i);
+    for (arr, 0..) |*a, i| a.* = @as(u32, @intCast(i));
 
     try enumeratePermutations(arr);
 }
@@ -189,8 +189,8 @@ pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
     if (win) |w| {
         for (w.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
         for (trackslice) |p| {
-            const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-            const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+            const x = @as(i32, @intFromFloat(p.pt[0] * 750 + 25));
+            const y = @as(i32, @intFromFloat(p.pt[1] * 750 + 25));
             // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
             im.drawCircle([4]u8, w.pix, x, y, 3, color);
         }
@@ -201,11 +201,11 @@ pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking2D, color: [4]u8) 
     if (win) |*w| {
         for (trackslice) |*p| {
             if (p.parent_id) |pid| {
-                const x = @floatToInt(i32, p.pt[0] * 750 + 25);
-                const y = @floatToInt(i32, p.pt[1] * 750 + 25);
+                const x = @as(i32, @intFromFloat(p.pt[0] * 750 + 25));
+                const y = @as(i32, @intFromFloat(p.pt[1] * 750 + 25));
                 const parent = tracking.getID(pid).?;
-                const x2 = @floatToInt(i32, parent.pt[0] * 750 + 25);
-                const y2 = @floatToInt(i32, parent.pt[1] * 750 + 25);
+                const x2 = @as(i32, @intFromFloat(parent.pt[0] * 750 + 25));
+                const y2 = @as(i32, @intFromFloat(parent.pt[1] * 750 + 25));
                 im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, color);
             }
         }
@@ -234,15 +234,31 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
     return cost;
 }
 
-// Implementation of the Munkres Algorithm for optimal (minimal cost) linear
-// sum assignment, but specialized on cell tracking where
-// 1-2 assignment is possible. In fact 0-1, 1-0, 1-1, 1-2 assignments are all possible! They correspond to:
+// Implementation of the Munkres Algorithm for optimal (minimal cost) linear-sum assignmnet,
+// but specialized for cell tracking where 1-2 assignment is possible.
+// In fact 0-1, 1-0, 1-1, 1-2 assignments are all possible! They correspond to:
 // 0-1 A cell enters the field of view through e.g. an image boundary, or appears from previously undetected state.
 // 1-0 A cell dies or leaves through the image boundary.
 // 1-1 A cell moves through time uneventfully (the most common case).
 // 1-2 A cell divides into two daughters.
 // We rule out 1-3 assignments as unrealistic for common framerates.
 // Implementation from [duke](https://users.cs.duke.edu/~brd/Teaching/Bio/asmb/current/Handouts/munkres.html)
+
+// From [duke](https://users.cs.duke.edu/~brd/Teaching/Bio/asmb/current/Handouts/munkres.html)
+// As each assignment is chosen that row and column are eliminated from
+// consideration.  The question is raised as to whether there is a better
+// algorithm.  In fact there exists a polynomial runtime complexity algorithm
+// for solving the assignment problem developed by James Munkre's in the late
+// 1950's despite the fact that some references still describe this as a problem
+// of exponential complexity.
+
+// The following 6-step algorithm is a modified form of the original Munkres'
+// Assignment Algorithm (sometimes referred to as the Hungarian Algorithm). This
+// algorithm describes to the manual manipulation of a two-dimensional matrix by
+// starring and priming zeros and by covering and uncovering rows and columns.
+// This is because, at the time of publication (1957), few people had access to
+// a computer and the algorithm was exercised by hand.
+
 pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
 
     // First we have to make an nxn grid of edge costs
@@ -250,12 +266,16 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
 
     // @breakpoint();
 
+    var _arena = std.heap.ArenaAllocator.init(allocator);
+    defer _arena.deinit();
+
+    const aa = _arena.allocator();
+
     const n = trackslice_prev.len;
     const m = trackslice_curr.len;
     // const k = @min()
 
-    var link_costs = try allocator.alloc(f32, n * m);
-    defer allocator.free(link_costs);
+    var link_costs = try aa.alloc(f32, n * m);
 
     // Generate costs
     for (trackslice_prev, 0..) |v1, i| {
@@ -264,10 +284,8 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         }
     }
 
-    var min_cost_prev = try allocator.alloc(f32, n);
-    defer allocator.free(min_cost_prev);
-    var min_cost_curr = try allocator.alloc(f32, m);
-    defer allocator.free(min_cost_curr);
+    var min_cost_prev = try aa.alloc(f32, n);
+    var min_cost_curr = try aa.alloc(f32, m);
 
     // initialize with smallest possible value (cost must be >= 0)
     for (min_cost_prev) |*c| c.* = 0;
@@ -289,19 +307,113 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         }
     }
 
-    const LinkState = enum { covered, uncovered, starred };
+    // Step 2 : Find a zero (Z) in the resulting matrix.  If there is no starred zero
+    // in its row or column, star Z. Repeat for each element in the matrix.
+    // Go to Step 3.
 
-    // Everything starts off uncovered
-    var link_state = try allocator.alloc(LinkState, n * m);
-    defer allocator.free(link_state);
+    const LinkState = enum { none, starred, primed };
+    const RowColState = enum { noncovered, covered };
+
+    // Everything starts off noncovered
+    var link_state = try aa.alloc(LinkState, n * m);
+    for (link_state) |*v| v.* = .noncovered;
+
+    // Link state description over `m` in dim 1
+    var vert_cover_m = try aa.alloc(RowColState, n);
+    for (vert_cover_m) |*v| v.* = .none;
+
+    // Link state description over `n` in dim 0
+    var vert_cover_n = try aa.alloc(RowColState, n);
+    for (vert_cover_n) |*v| v.* = .none;
+
+    // Temp state keeps track of rows and columns where we've found stars
+    // during this (greedy) search.
+    var vert_star_m = try aa.alloc(LinkState, m);
+    for (vert_star_m) |*v| v.* = .none; // unknown
+    var vert_star_n = try aa.alloc(LinkState, n);
+    for (vert_star_n) |*v| v.* = .none; // unknown
+
+    // do step 2. greedily search through matrix elements and star them.
     for (trackslice_prev, 0..) |_, i| {
         for (trackslice_curr, 0..) |_, j| {
-            link_state[i * m + j] = .uncovered;
+            const c = link_costs[i * n + j];
+            if (c != 0.0) continue;
+            if (vert_star_m[i] == .starred) continue;
+            if (vert_star_n[j] == .starred) continue;
+
+            // we've found an unstarred zero. star it!
+            link_state[i * n + j] = .starred;
+            vert_star_m[i] = .starred;
+            vert_star_n[j] = .starred;
         }
+    }
+
+    // Step 3:  Cover each column containing a starred zero.  If K columns are
+    // covered, the starred zeros describe a complete set of unique assignments.  In
+    // this case, Go to DONE, otherwise, Go to Step 4.
+
+    // Iterate over the m vertices that represent columns
+    for (vert_star_m) |v| {
+        if (v != .starred) break;
+        std.debug.print("We have a winner!", .{});
+        // TODO: Connect children to parents HERE given final assignment matrix.
+        return;
+    }
+
+    // Step 4: Find a noncovered zero and prime it.  If there is no starred zero in
+    // the row containing this primed zero, Go to Step 5.  Otherwise, cover this row
+    // and uncover the column containing the starred zero. Continue in this manner
+    // until there are no uncovered zeros left. Save the smallest uncovered value
+    // and Go to Step 6.
+
+    // do step 4.
+    outer: for (trackslice_prev, 0..) |_, i| {
+        for (trackslice_curr, 0..) |_, j| {
+            const c = link_costs[i * n + j];
+
+            // Find a noncovered zero
+            if (c != 0.0) continue;
+            if (vert_cover_m[i] != .noncovered) continue;
+            if (vert_cover_n[j] != .noncovered) continue;
+
+            // we've found a noncovered zero, so prime it!
+            link_state[i * n + j] = .prime;
+
+            // now check for stars in that row. if there aren't any then break to step 5.
+            if (vert_star_m[i] != .starred) break :outer;
+
+            // TODO: since there is never more than one starred zero in a row or column we
+            // can just store the r/c index and look it up without searching.
+            const column_with_star = blk: {
+                for (0..n) |col| {
+                    if (link_state[i * n + col] == .starred) break :blk col;
+                }
+            };
+            vert_cover_m[i] = .covered;
+            vert_cover_n[column_with_star] = .noncovered;
+
+            // // if there are no uncovered zeros left then break.
+            // for (link_costs,0..) |cost, idx| {
+            //     const r = idx // n;
+            // }
+
+        }
+    } else {
+        // Exited without breaking!
+        unreachable;
     }
 
     // Then we iterate over the edges.
     // Find the cheapest unassigned edge.
+
+    // Step 5: Construct a series of alternating primed and starred zeros as
+    // follows. Let Z0 represent the uncovered primed zero found in Step 4. Let Z1
+    // denote the starred zero in the column of Z0 (if any). Let Z2 denote the
+    // primed zero in the row of Z1 (there will always be one). Continue until the
+    // series terminates at a primed zero that has no starred zero in its column.
+    // Unstar each starred zero of the series, star each primed zero of the series,
+    // erase all primes and uncover every line in the matrix. Return to Step 3.
+
 }
 
 test "test the munkres tracker" {}
@@ -415,7 +527,7 @@ pub fn linkFramesGreedy(trackslice_prev: []const TrackedCell, trackslice_curr: [
     for (cost, 0..) |c, i| {
         const ia = i / nb;
         const ib = i % nb;
-        try edgeQ.add(.{ .cost = c, .ia = @intCast(u32, ia), .ib = @intCast(u32, ib) });
+        try edgeQ.add(.{ .cost = c, .ia = @as(u32, @intCast(ia)), .ib = @as(u32, @intCast(ib)) });
     }
 
     // greedily go through edges and add them to graph iff they don't violate constraints
@@ -563,8 +675,8 @@ const Tracking2D = struct {
 };
 
 pub fn pt2screen(p: Pt) [2]i32 {
-    const x = @floatToInt(i32, p[0] * 750 + 25);
-    const y = @floatToInt(i32, p[1] * 750 + 25);
+    const x = @as(i32, @intFromFloat(p[0] * 750 + 25));
+    const y = @as(i32, @intFromFloat(p[1] * 750 + 25));
     return .{ x, y };
 }
 
@@ -600,7 +712,7 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
     for (0..10) |_| {
         const cell = .{
             .pt = .{ random.float(f32), random.float(f32) },
-            .id = @intCast(u32, tracking.items.len),
+            .id = @as(u32, @intCast(tracking.items.len)),
             .time = 0, //random.uintLessThan(u16, 4),
             .parent_id = null,
         };
@@ -622,7 +734,7 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
 
             const cell = .{
                 .pt = .{ random.float(f32), random.float(f32) },
-                .id = @intCast(u32, tracking.items.len),
+                .id = @as(u32, @intCast(tracking.items.len)),
                 .time = 0, //random.uintLessThan(u16, 4),
                 .parent_id = null,
             };
@@ -639,7 +751,7 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
             const parent = unfinished_lineage_q.pop();
             const cell = .{
                 .pt = .{ parent.pt[0] + dx, parent.pt[1] + dy },
-                .id = @intCast(u32, tracking.items.len),
+                .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
@@ -656,7 +768,7 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
             // create and enqueue cell 1
             const cell1 = .{
                 .pt = .{ parent.pt[0] + dx, parent.pt[1] + dy },
-                .id = @intCast(u32, tracking.items.len),
+                .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
@@ -668,7 +780,7 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
             // create and enqueue cell 2
             const cell2 = .{
                 .pt = .{ parent.pt[0] - dx, parent.pt[1] - dy },
-                .id = @intCast(u32, tracking.items.len),
+                .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
