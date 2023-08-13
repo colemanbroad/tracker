@@ -13,7 +13,7 @@ const std = @import("std");
 
 const milliTimestamp = std.time.milliTimestamp;
 
-const SDL_WINDOWPOS_UNDEFINED = @bitCast(c_int, cc.SDL_WINDOWPOS_UNDEFINED_MASK);
+const SDL_WINDOWPOS_UNDEFINED = @as(c_int, @bitCast(cc.SDL_WINDOWPOS_UNDEFINED_MASK));
 
 pub fn initSDL() !void {
     if (cc.SDL_Init(cc.SDL_INIT_VIDEO) != 0) return error.SDLInitializationFailed;
@@ -50,8 +50,8 @@ pub const Window = struct {
             "SDL Window",
             SDL_WINDOWPOS_UNDEFINED,
             SDL_WINDOWPOS_UNDEFINED,
-            @intCast(c_int, nx),
-            @intCast(c_int, ny),
+            @as(c_int, @intCast(nx)),
+            @as(c_int, @intCast(ny)),
             // cc.SDL_WINDOW_OPENGL,
             cc.SDL_WINDOW_SHOWN,
         ) orelse {
@@ -70,7 +70,7 @@ pub const Window = struct {
         // print("SDL_GetWindowSurface [{}ms]\n", .{t2 - t1});
 
         var pix: [][4]u8 = undefined;
-        pix.ptr = @ptrCast([*][4]u8, surface.pixels.?);
+        pix.ptr = @as([*][4]u8, @ptrCast(surface.pixels.?));
         pix.len = nx * ny;
         var img = im.Img2D([4]u8){
             .img = pix,
@@ -120,10 +120,10 @@ pub const Window = struct {
     }
 
     pub fn setPixel(this: *This, x: c_int, y: c_int, pixel: [4]u8) void {
-        const target_pixel = @ptrToInt(this.surface.pixels) +
-            @intCast(usize, y) * @intCast(usize, this.surface.pitch) +
-            @intCast(usize, x) * 4;
-        @intToPtr(*u32, target_pixel).* = @bitCast(u32, pixel);
+        const target_pixel = @intFromPtr(this.surface.pixels) +
+            @as(usize, @intCast(y)) * @as(usize, @intCast(this.surface.pitch)) +
+            @as(usize, @intCast(x)) * 4;
+        @as(*u32, @ptrFromInt(target_pixel)).* = @as(u32, @bitCast(pixel));
     }
 
     pub fn setPixels(this: *This, buffer: [][4]u8) void {
@@ -139,11 +139,11 @@ pub const Window = struct {
         // TOP LEFT BLUE
         im.drawCircle([4]u8, this.pix, 0, 0, 13, .{ 255, 0, 0, 255 });
         // TOP RIGHT GREEN
-        im.drawCircle([4]u8, this.pix, @intCast(i32, this.nx), 0, 13, .{ 0, 255, 0, 255 });
+        im.drawCircle([4]u8, this.pix, @as(i32, @intCast(this.nx)), 0, 13, .{ 0, 255, 0, 255 });
         // BOT LEFT RED
-        im.drawCircle([4]u8, this.pix, 0, @intCast(i32, this.ny), 13, .{ 0, 0, 255, 255 });
+        im.drawCircle([4]u8, this.pix, 0, @as(i32, @intCast(this.ny)), 13, .{ 0, 0, 255, 255 });
         // BOT RIGHT WHITE
-        im.drawCircle([4]u8, this.pix, @intCast(i32, this.nx), @intCast(i32, this.ny), 13, .{ 255, 255, 255, 255 });
+        im.drawCircle([4]u8, this.pix, @as(i32, @intCast(this.nx)), @as(i32, @intCast(this.ny)), 13, .{ 255, 255, 255, 255 });
         // cc.SDL_UnlockSurface(this.surface);
     }
 

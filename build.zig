@@ -47,8 +47,8 @@ fn addTracy(b: *Builder, exe: *CompileStep) !void {
 }
 
 pub fn addSDL(cs: *CompileStep) void {
-    cs.addLibraryPath("/opt/homebrew/Cellar/sdl2/2.26.3/lib/");
-    cs.addIncludePath("/opt/homebrew/Cellar/sdl2/2.26.3/include/");
+    cs.addLibraryPath(.{ .path = "/opt/homebrew/Cellar/sdl2/2.26.3/lib/" });
+    cs.addIncludePath(.{ .path = "/opt/homebrew/Cellar/sdl2/2.26.3/include/" });
     cs.linkSystemLibraryName("SDL2");
 }
 

@@ -80,8 +80,8 @@ pub const GridHash2 = struct {
 
         const offset = Vec2{ bbox.x.lo, bbox.y.lo };
         const scale = Vec2{
-            (bbox.x.hi - bbox.x.lo) / (@intToFloat(f32, nx) - 1e-5),
-            (bbox.y.hi - bbox.y.lo) / (@intToFloat(f32, ny) - 1e-5),
+            (bbox.x.hi - bbox.x.lo) / (@as(f32, @floatFromInt(nx)) - 1e-5),
+            (bbox.y.hi - bbox.y.lo) / (@as(f32, @floatFromInt(ny)) - 1e-5),
         }; //
 
         print("bbox = {}\n", .{bbox});
@@ -98,7 +98,7 @@ pub const GridHash2 = struct {
         };
 
         // actually add points to grid!
-        for (pts, 0..) |p, i| try self.setWc(p, @intCast(u32, i));
+        for (pts, 0..) |p, i| try self.setWc(p, @as(u32, @intCast(i)));
 
         return self;
     }
@@ -109,15 +109,15 @@ pub const GridHash2 = struct {
 
     pub fn world2grid(self: Self, world_coord: Vec2) V2u32 {
         const v = @floor((world_coord - self.offset) / self.scale);
-        const v0 = std.math.clamp(v[0], 0, @intToFloat(f32, self.nx - 1));
-        const v1 = std.math.clamp(v[1], 0, @intToFloat(f32, self.ny - 1));
-        return .{ @floatToInt(u32, v0), @floatToInt(u32, v1) };
+        const v0 = std.math.clamp(v[0], 0, @as(f32, @floatFromInt(self.nx - 1)));
+        const v1 = std.math.clamp(v[1], 0, @as(f32, @floatFromInt(self.ny - 1)));
+        return .{ @as(u32, @intFromFloat(v0)), @as(u32, @intFromFloat(v1)) };
     }
 
     /// #unused
     pub fn world2gridNoBounds(self: Self, world_coord: Vec2) V2i32 {
         const v = @floor((world_coord - self.offset) / self.scale);
-        return .{ @floatToInt(i32, v[0]), @floatToInt(i32, v[1]) };
+        return .{ @as(i32, @intFromFloat(v[0])), @as(i32, @intFromFloat(v[1])) };
     }
 
     /// get continuous world coordinate associated with _center_ of grid box
@@ -269,8 +269,8 @@ pub const GridHash2 = struct {
 
     fn pix2Vec2(pt: V2u32) Vec2 {
         return Vec2{
-            @intToFloat(f32, pt[0]),
-            @intToFloat(f32, pt[1]),
+            @as(f32, @floatFromInt(pt[0])),
+            @as(f32, @floatFromInt(pt[1])),
         };
     }
 };
@@ -278,8 +278,8 @@ pub const GridHash2 = struct {
 /// Deprecated. Unused. Rounding performed in GridHash.world2grid()
 fn vec2Pix(v: Vec2) V2u32 {
     return V2u32{
-        @floatToInt(u32, v[0]),
-        @floatToInt(u32, v[1]),
+        @as(u32, @intFromFloat(v[0])),
+        @as(u32, @intFromFloat(v[1])),
     };
 }
 
@@ -356,7 +356,7 @@ test "test GridHash2" {
 
     for (pts) |p| {
         const gc = grid_hash.world2grid(p);
-        im.drawCircleOutline(picture, @intCast(i32, gc[0]), @intCast(i32, gc[1]), 3, .{ 255, 255, 255, 255 });
+        im.drawCircleOutline(picture, @as(i32, @intCast(gc[0])), @as(i32, @intCast(gc[1])), 3, .{ 255, 255, 255, 255 });
     }
     try im.saveRGBA(picture, test_home ++ "trialpicture.tga");
 
@@ -365,7 +365,7 @@ test "test GridHash2" {
     while (idx < picture.nx * picture.ny) : (idx += 1) {
         const gelems = grid_hash.grid[idx * grid_hash.nd .. (idx + 1) * grid_hash.nd];
         const gel = if (gelems[0]) |g| g else continue;
-        picture.img[idx] = .{ @intCast(u8, gel % 255), 0, @intCast(u8, gel % 255), 255 };
+        picture.img[idx] = .{ @as(u8, @intCast(gel % 255)), 0, @as(u8, @intCast(gel % 255)), 255 };
     }
     try im.saveRGBA(picture, test_home ++ "trialpicture.tga");
 }

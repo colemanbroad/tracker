@@ -14,8 +14,9 @@ const random = prng.random();
 var allocator = std.testing.allocator;
 // const print = std.debug.print;
 
-const Vector = std.meta.Vector;
-pub const Vec3 = Vector(3, f32);
+// const Vector = std.meta.Vector;
+// const Vector = s
+pub const Vec3 = @Vector(3, f32);
 
 test {
     std.testing.refAllDecls(@This());
@@ -44,10 +45,10 @@ pub fn randNormalVec2() Vec2 {
 pub fn sphereTrajectory() [100]Vec3 {
     var phis: [100]f32 = undefined;
     // for (phis) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * pi;
-    for (&phis, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * pi;
+    for (&phis, 0..) |*v, i| v.* = ((@as(f32, @floatFromInt(i))) / 99) * pi;
     var thetas: [100]f32 = undefined;
     // for (thetas) |*v,i| v.* = ((@intToFloat(f32,i)+1)/105) * 2*pi;
-    for (&thetas, 0..) |*v, i| v.* = ((@intToFloat(f32, i)) / 99) * 2 * pi;
+    for (&thetas, 0..) |*v, i| v.* = ((@as(f32, @floatFromInt(i))) / 99) * 2 * pi;
     var pts: [100]Vec3 = undefined;
     for (&pts, 0..) |*v, i| v.* = Vec3{ @cos(phis[i]), @sin(thetas[i]) * @sin(phis[i]), @cos(thetas[i]) * @sin(phis[i]) }; // ZYX coords
     return pts;
@@ -57,7 +58,7 @@ const Allocator = std.mem.Allocator;
 
 const Pix = @Vector(2, u31);
 pub fn pt2PixCast(p: Vec2) Pix {
-    return Pix{ @floatToInt(u31, p[0]), @floatToInt(u31, p[1]) };
+    return Pix{ @as(u31, @intFromFloat(p[0])), @as(u31, @intFromFloat(p[1])) };
 }
 
 pub fn newBBox(x0: f32, x1: f32, y0: f32, y1: f32) BBox {
@@ -141,12 +142,12 @@ pub fn intersectRayAABB(ray: Ray, box: Ray) struct { pt0: ?Vec3, pt1: ?Vec3 } {
     const alphasFar = (box.pt1 - rp) / dr;
 
     // Compute each of the six intersection points.
-    const ipZNear = rp + dr * @splat(3, alphasNear[0]);
-    const ipYNear = rp + dr * @splat(3, alphasNear[1]);
-    const ipXNear = rp + dr * @splat(3, alphasNear[2]);
-    const ipZFar = rp + dr * @splat(3, alphasFar[0]);
-    const ipYFar = rp + dr * @splat(3, alphasFar[1]);
-    const ipXFar = rp + dr * @splat(3, alphasFar[2]);
+    const ipZNear = rp + dr * @as(Vec3, @splat(alphasNear[0]));
+    const ipYNear = rp + dr * @as(Vec3, @splat(alphasNear[1]));
+    const ipXNear = rp + dr * @as(Vec3, @splat(alphasNear[2]));
+    const ipZFar = rp + dr * @as(Vec3, @splat(alphasFar[0]));
+    const ipYFar = rp + dr * @as(Vec3, @splat(alphasFar[1]));
+    const ipXFar = rp + dr * @as(Vec3, @splat(alphasFar[2]));
 
     // Test if each of the six intersection points lies inside the rectangular box face
     const p0 = box.pt0;
@@ -287,8 +288,8 @@ pub fn intersectRayFace(ray: Ray, face: Face) struct { b: f32, c: f32, pt: Vec3 
     const matinv = invert3x3(matrix);
     const abc = matVecMul(matinv, r0 - p0);
 
-    const intersectionPoint1 = @splat(3, abc[0]) * dr + r0;
-    const intersectionPoint2 = @splat(3, abc[1]) * dp1 + @splat(3, abc[2]) * dp2 + p0;
+    const intersectionPoint1 = @as(Vec3, @splat(abc[0])) * dr + r0;
+    const intersectionPoint2 = @as(Vec3, @splat(abc[1])) * dp1 + @as(Vec3, @splat(abc[2])) * dp2 + p0;
 
     print2(@src(), "\n\nabc={d}\n\n", .{abc});
     print2(@src(), "intersection point (v1) = a*dr + r0 = {d} \n", .{intersectionPoint1});
@@ -318,9 +319,9 @@ pub fn intersectRayAxisFace(ray: Ray, face: AxisFace) ?Vec3 {
     const alphas = (fp - rp) / dv;
     // const a_low  = (box.low - pt0) / dv;
     // const a_hi   = (box.hi  - pt0) / dv;
-    const xZ = rp + dv * @splat(3, alphas[0]);
-    const xY = rp + dv * @splat(3, alphas[1]);
-    const xX = rp + dv * @splat(3, alphas[2]);
+    const xZ = rp + dv * @as(Vec3, @splat(alphas[0]));
+    const xY = rp + dv * @as(Vec3, @splat(alphas[1]));
+    const xX = rp + dv * @as(Vec3, @splat(alphas[2]));
 
     // var res:?Vec3 = null;
     switch (face.axis) {
@@ -363,7 +364,7 @@ pub fn getCircumcircle2d(tri: [3]Vec2) CircleR2 {
     const _a = (tri[0] - center);
     const _b = (tri[1] - center);
     const _c = (tri[2] - center);
-    const mindist = std.math.min3(abs2(_a), abs2(_b), abs2(_c)) * 0.1;
+    const mindist = @min(abs2(_a), abs2(_b), abs2(_c)) * 0.1;
     // const mindist = 1.0;
 
     const a = _a / Vec2{ mindist, mindist };
@@ -536,14 +537,14 @@ pub fn lerpVec2(t: f32, a: Vec2, b: Vec2) Vec2 {
 // VEC2 AND RAY2 ⚡️ VEC2 AND RAY2 ⚡️ VEC2 AND RAY2 ⚡️ VEC2 AND RAY2 ⚡️ VEC2 AND RAY2 ⚡️ VEC2 AND RAY2 ⚡️ VEC2 AND RAY2
 
 pub const Ray2 = [2]Vec2;
-pub const Vec2 = Vector(2, f32);
+pub const Vec2 = @Vector(2, f32);
 
 pub fn vec2(a: [2]f32) Vec2 {
     return Vec2{ a[0], a[1] };
 }
 
 pub fn uvec2(a: [2]u32) Vec2 {
-    return Vec2{ @intToFloat(f32, a[0]), @intToFloat(f32, a[1]) };
+    return Vec2{ @as(f32, @floatFromInt(a[0])), @as(f32, @floatFromInt(a[1])) };
 }
 
 pub fn abs2(a: Vec2) f32 {
@@ -595,16 +596,16 @@ pub fn l2norm(a: Vec3) f32 {
 
 pub fn normalize(a: Vec3) Vec3 {
     const s = l2norm(a);
-    return a / @splat(3, s);
+    return a / @as(Vec3, @splat(s));
 }
 
 pub fn normalize2(a: Vec2) Vec2 {
     const s = abs2(a);
-    return a / @splat(2, s);
+    return a / @as(Vec2, @splat(s));
 }
 
 pub fn scale(a: Vec3, b: f32) Vec3 {
-    return a * @splat(3, b);
+    return a * @as(Vec3, @splat(b));
 }
 
 // res = Mat*vec. mat stored as [col1 col2 col3]. Access with mat[3*col + row].
@@ -699,7 +700,7 @@ pub fn rotateCwithRotorAB(vc: Vec3, va: Vec3, vb: Vec3) Vec3 {
     const knorm = normalize(k);
     const cosTh = dot(anorm, bnorm);
     const sinTh = l2norm(k);
-    const res = vc * @splat(3, cosTh) + cross(knorm, vc) * @splat(3, sinTh) + knorm * @splat(3, dot(knorm, vc) * (1 - cosTh));
+    const res = vc * @as(Vec3, @splat(cosTh)) + cross(knorm, vc) * @as(Vec3, @splat(sinTh)) + knorm * @as(Vec3, @splat(dot(knorm, vc) * (1 - cosTh)));
     return res;
 }
 

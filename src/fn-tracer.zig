@@ -55,7 +55,7 @@ pub fn Tracer(comptime Ntrials: u32) type {
                 var idx: u32 = 0;
                 for (this.v[0..this.idx]) |tp| {
                     if (!std.mem.eql(u8, tp.src_name, funcname.*)) continue;
-                    timespans[idx] = @intToFloat(f32, tp.delta_t);
+                    timespans[idx] = @as(f32, @floatFromInt(tp.delta_t));
                     idx += 1;
                 }
                 const stats = statistics(f32, timespans[0..idx]);
@@ -99,8 +99,8 @@ fn statistics(comptime T: type, arr: []T) Stats {
         s.mean += x;
         s.stddev += x * x;
     }
-    s.mean /= @intToFloat(f32, arr.len);
-    s.stddev /= @intToFloat(f32, arr.len);
+    s.mean /= @as(f32, @floatFromInt(arr.len));
+    s.stddev /= @as(f32, @floatFromInt(arr.len));
     s.stddev -= s.mean * s.mean;
     s.stddev = @sqrt(s.stddev);
 

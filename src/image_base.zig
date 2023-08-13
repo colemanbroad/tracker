@@ -136,7 +136,7 @@ pub fn saveF32AsTGAGreyNormed(
     // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,data[i / 4]),0,255);
     const mnmx = minmax(f32, data);
     normAffineNoErr(data, mnmx[0], mnmx[1]);
-    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, data[i / 4] * 255); // get negative value?
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @as(u8, @intFromFloat(data[i / 4] * 255)); // get negative value?
     try saveU8AsTGA(rgba, h, w, name);
 }
 
@@ -150,8 +150,8 @@ pub fn saveF32AsTGAGreyNormedCam(
     // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,cam[i / 4]),0,255);
     const mnmx = minmax(f32, cam.screen);
     normAffineNoErr(cam.screen, mnmx[0], mnmx[1]);
-    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, cam.screen[i / 4] * 255); // get negative value?
-    try saveU8AsTGA(rgba, @intCast(u16, cam.nyPixels), @intCast(u16, cam.nxPixels), name);
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @as(u8, @intFromFloat(cam.screen[i / 4] * 255)); // get negative value?
+    try saveU8AsTGA(rgba, @as(u16, @intCast(cam.nyPixels)), @as(u16, @intCast(cam.nxPixels)), name);
 }
 
 /// deprecated
@@ -161,8 +161,8 @@ pub fn saveF32Img2D(img: Img2D(f32), name: []const u8) !void {
     // for (&rgba) |*v, i| v.* = if (i % 4 == 3) 255 else clamp(@floatToInt(u8,img.img[i / 4]),0,255);
     const mnmx = minmax(f32, img.img);
     normAffineNoErr(img.img, mnmx[0], mnmx[1]);
-    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @floatToInt(u8, img.img[i / 4] * 255); // get negative value?
-    try saveU8AsTGA(rgba, @intCast(u16, img.ny), @intCast(u16, img.nx), name);
+    for (rgba, 0..) |*v, i| v.* = if (i % 4 == 3) 255 else @as(u8, @intFromFloat(img.img[i / 4] * 255)); // get negative value?
+    try saveU8AsTGA(rgba, @as(u16, @intCast(img.ny)), @as(u16, @intCast(img.nx)), name);
 }
 
 /// deprecated
@@ -239,8 +239,8 @@ pub fn saveU8AsTGA(data: []u8, h: u16, w: u16, name: []const u8) !void {
 
 pub fn saveRGBA(pic: Img2D([4]u8), name: []const u8) !void {
     const data = std.mem.sliceAsBytes(pic.img);
-    const h = @intCast(u16, pic.ny);
-    const w = @intCast(u16, pic.nx);
+    const h = @as(u16, @intCast(pic.ny));
+    const w = @as(u16, @intCast(pic.nx));
     try saveU8AsTGA(data, h, w, name);
 }
 
@@ -263,7 +263,7 @@ pub fn drawLine(comptime T: type, img: Img2D(T), _x0: u31, _y0: u31, x1: u31, y1
     var e2: i32 = 0;
 
     while (true) {
-        const idx = @intCast(u32, x0) + img.nx * @intCast(u32, y0);
+        const idx = @as(u32, @intCast(x0)) + img.nx * @as(u32, @intCast(y0));
         img.img[idx] = val;
         e2 = 2 * err;
         if (e2 >= dy) {
@@ -305,7 +305,7 @@ pub fn drawLineInBounds2(comptime T: type, img: Img2D(T), _x0: i32, _y0: i32, x1
 
     while (true) {
         if (inbounds(img, .{ x0, y0 })) {
-            const idx = @intCast(u32, x0) + img.nx * @intCast(u32, y0);
+            const idx = @as(u32, @intCast(x0)) + img.nx * @as(u32, @intCast(y0));
             img.img[idx] = val; // blend(img.img[idx], val);
         }
         e2 = 2 * err;
@@ -338,7 +338,7 @@ pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, _r: i32, va
         const x = x0 + dx;
         const y = y0 + dy;
         if (inbounds(pic, .{ x, y }) and dx * dx + dy * dy <= r * r) {
-            const imgigx = @intCast(u31, x) + pic.nx * @intCast(u31, y);
+            const imgigx = @as(u31, @intCast(x)) + pic.nx * @as(u31, @intCast(y));
             pic.img[imgigx] = blend(pic.img[imgigx], val);
         }
     }
@@ -352,32 +352,32 @@ pub fn drawCircleOutline(pic: Img2D([4]u8), xm: i32, ym: i32, _r: i32, val: [4]u
     var err: i32 = 2 - 2 * r; // /* bottom left to top right */
     var x0: i32 = undefined;
     var y0: i32 = undefined;
-    const nx = @intCast(i32, pic.nx);
+    const nx = @as(i32, @intCast(pic.nx));
     var idx: usize = undefined;
 
     while (x < 0) {
         x0 = xm - x;
         y0 = ym + y;
         if (inbounds(pic, .{ x0, y0 })) {
-            idx = @intCast(usize, x0 + nx * y0);
+            idx = @as(usize, @intCast(x0 + nx * y0));
             pic.img[idx] = val;
         }
         x0 = xm + x;
         y0 = ym + y;
         if (inbounds(pic, .{ x0, y0 })) {
-            idx = @intCast(usize, x0 + nx * y0);
+            idx = @as(usize, @intCast(x0 + nx * y0));
             pic.img[idx] = val;
         }
         x0 = xm - x;
         y0 = ym - y;
         if (inbounds(pic, .{ x0, y0 })) {
-            idx = @intCast(usize, x0 + nx * y0);
+            idx = @as(usize, @intCast(x0 + nx * y0));
             pic.img[idx] = val;
         }
         x0 = xm + x;
         y0 = ym - y;
         if (inbounds(pic, .{ x0, y0 })) {
-            idx = @intCast(usize, x0 + nx * y0);
+            idx = @as(usize, @intCast(x0 + nx * y0));
             pic.img[idx] = val;
         }
 
@@ -402,7 +402,7 @@ test "imageBase. saveU8AsTGAGrey" {
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     // var grey = .{0}**(2^10);
     var grey = std.mem.zeroes([1 << 10]u8);
-    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    for (&grey, 0..) |*v, i| v.* = @as(u8, @intCast(i % 256));
     print("\n number ;;; {} \n", .{1 << 5});
     try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 5, test_home ++ "correct.tga");
     print("\n", .{});
@@ -413,7 +413,7 @@ test "imageBase. saveU8AsTGAGrey (h & w too small)" {
     // var grey = .{0}**(2^10);
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var grey = std.mem.zeroes([1 << 10]u8);
-    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    for (&grey, 0..) |*v, i| v.* = @as(u8, @intCast(i % 256));
     print("\n number ;;; {} \n", .{1 << 6});
     try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 4, test_home ++ "height_width_too_small.tga");
     print("\n", .{});
@@ -424,7 +424,7 @@ test "imageBase. saveU8AsTGAGrey (h & w too big)" {
     // var grey = .{0}**(2^10);
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var grey = std.mem.zeroes([1 << 10]u8);
-    for (&grey, 0..) |*v, i| v.* = @intCast(u8, i % 256);
+    for (&grey, 0..) |*v, i| v.* = @as(u8, @intCast(i % 256));
     print("\n number ;;; {} \n", .{1 << 6});
     try saveU8AsTGAGrey(&grey, 1 << 5, 1 << 6, test_home ++ "height_width_too_big.tga");
     print("\n", .{});
@@ -441,7 +441,7 @@ test "imageBase. saveU8AsTGA" {
             3 => 255, // alpha
             else => unreachable,
         };
-        break :bl @intCast(u8, x);
+        break :bl @as(u8, @intCast(x));
     };
     // const x = @intCast(u8, i % 256); // alpha channel changes too!
     try saveU8AsTGA(&rgba, 1 << 5, 1 << 5, test_home ++ "multicolor.tga");

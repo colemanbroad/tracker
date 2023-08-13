@@ -92,7 +92,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
     const bbox = g.boundsBBox(_pts);
     const box_width = bbox.x.hi - bbox.x.lo;
     const box_height = bbox.y.hi - bbox.y.lo;
-    const n_pt = @intCast(u32, pts.len);
+    const n_pt = @as(u32, @intCast(pts.len));
     pts[n_pt - 3] = .{ bbox.x.lo - box_width * 0.1, bbox.y.lo - box_height * 0.1 };
     pts[n_pt - 2] = .{ bbox.x.lo - box_width * 0.1, bbox.y.hi + 2 * box_height };
     pts[n_pt - 1] = .{ bbox.x.hi + 2 * box_width, bbox.y.lo - box_height * 0.1 };
@@ -333,7 +333,7 @@ pub fn delaunay2d(allo: std.mem.Allocator, _pts: []Pt) !Mesh2D {
         // Add new triangles to mesh and grid d.s.
         // const addPointInPoly_tracy_zone = ztracy.ZoneNC(@src(), "addPointInPoly", 0x00_ff_00_00);
         for (edges) |e| {
-            try mesh2d.addTri(.{ e[0], e[1], @intCast(u32, idx_pt) });
+            try mesh2d.addTri(.{ e[0], e[1], @as(u32, @intCast(idx_pt)) });
         }
         // addPointInPoly_tracy_zone.End(); // ztracy
 
@@ -483,12 +483,12 @@ pub const GridHash2 = struct {
     a: Allocator,
 
     pub fn init(a: Allocator, pts: []Pt, nx: u16, ny: u16, nd: u16) !Self {
-        var grid = try a.alloc(?Elem, nx * ny * @intCast(u32, nd));
+        var grid = try a.alloc(?Elem, nx * ny * @as(u32, @intCast(nd)));
         for (grid) |*v| v.* = null;
 
         const bbox = g.boundsBBox(pts);
         const offset = Pt{ bbox.x.lo, bbox.y.lo };
-        const scale = Pt{ (bbox.x.hi - bbox.x.lo) / (@intToFloat(f32, nx) - 1e-5), (bbox.y.hi - bbox.y.lo) / (@intToFloat(f32, ny) - 1e-5) }; //
+        const scale = Pt{ (bbox.x.hi - bbox.x.lo) / (@as(f32, @floatFromInt(nx)) - 1e-5), (bbox.y.hi - bbox.y.lo) / (@as(f32, @floatFromInt(ny)) - 1e-5) }; //
 
         return Self{
             .nx = nx,
@@ -511,14 +511,14 @@ pub const GridHash2 = struct {
 
     pub fn world2grid(self: Self, world_coord: Pt) V2u32 {
         const v = @floor((world_coord - self.offset) / self.scale);
-        const v0 = std.math.clamp(v[0], 0, @intToFloat(f32, self.nx - 1));
-        const v1 = std.math.clamp(v[1], 0, @intToFloat(f32, self.ny - 1));
-        return .{ @floatToInt(u32, v0), @floatToInt(u32, v1) };
+        const v0 = std.math.clamp(v[0], 0, @as(f32, @floatFromInt(self.nx - 1)));
+        const v1 = std.math.clamp(v[1], 0, @as(f32, @floatFromInt(self.ny - 1)));
+        return .{ @as(u32, @intFromFloat(v0)), @as(u32, @intFromFloat(v1)) };
     }
 
     pub fn world2gridNoBounds(self: Self, world_coord: Pt) V2i32 {
         const v = @floor((world_coord - self.offset) / self.scale);
-        return .{ @floatToInt(i32, v[0]), @floatToInt(i32, v[1]) };
+        return .{ @as(i32, @intFromFloat(v[0])), @as(i32, @intFromFloat(v[1])) };
     }
 
     pub fn gridCenter2World(self: Self, gridpt: V2u32) Pt {
@@ -731,8 +731,8 @@ pub const GridHash2 = struct {
 
 fn pix2Vec2(pt: Pix) Pt {
     return Pt{
-        @intToFloat(f32, pt[0]),
-        @intToFloat(f32, pt[1]),
+        @as(f32, @floatFromInt(pt[0])),
+        @as(f32, @floatFromInt(pt[1])),
     };
 }
 
@@ -749,8 +749,8 @@ fn pix2Vec2(pt: Pix) Pt {
 
 fn vec2Pix(v: Pt) Pix {
     return Pix{
-        @floatToInt(u32, v[0]),
-        @floatToInt(u32, v[1]),
+        @as(u32, @intFromFloat(v[0])),
+        @as(u32, @intFromFloat(v[1])),
     };
 }
 
@@ -847,7 +847,7 @@ pub const Mesh2D = struct {
         {
             var i: u8 = 0;
             while (i < 4) : (i += 1) {
-                const fi = @intToFloat(f32, i);
+                const fi = @as(f32, @floatFromInt(i));
                 const x = 6 * @mod(fi, 2.0) + random.float(f32);
                 const y = 6 * @floor(fi / 2.0) + random.float(f32);
                 s.vs.appendAssumeCapacity(.{ x, y });
@@ -884,7 +884,7 @@ pub const Mesh2D = struct {
     /// add point return it's index in arraylist
     pub fn addPt(self: *Self, pt: Pt) !PtIdx {
         try self.vs.append(pt);
-        return @intCast(PtIdx, self.vs.items.len - 1);
+        return @as(PtIdx, @intCast(self.vs.items.len - 1));
     }
 
     /// Deprecated: add triangles whose points are already there

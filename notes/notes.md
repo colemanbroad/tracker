@@ -233,9 +233,17 @@ N=100k – kdtree alone
 
 So then I tried the builting `sample ...` command line utility and it apparently has no access to source info unless we build in .Debug mode... which totally throws off the timings! 
 Use `renice` to improve the quality of the `sample` util. [see](https://gist.github.com/loderunner/36724cc9ee8db66db305#improving-your-sample)
+
 So now I'm downloading 8GB XCode 14 just to be able to use their instrumentation tools... Which probably won't even work? I can't even install XCode 14... And XCode 12.5 does work with macos 12.5. And the Command Line Dev Tools don't even have Instruments. And then according to [this](https://stackoverflow.com/questions/11445619/profiling-c-on-mac-os-x) I'm not even supposed to use Instruments in 2022... But then I can't get the other thing (xctrace) to work... But then Instruments DOES WORK!!! And it knows my symbols! Why? 
 
+```
+1. Open Instruments
+2. Run binary
+```
+
 But unfortunately it smooshes everything together in a call tree when we really want to see the entire call stack including line numbers! This is the only way. Because fn A might call fn B in multiple locations. And fn A might be called from multiple different parents in different locations! And all this context might matter.
+
+
 
 ## Hyperfine
 
@@ -418,15 +426,12 @@ Intuition behind unbiased estimator of variance (for Gaussian with unknown mean)
 # Bjoern Andres' paper on Moral Lineage Tracing optimization
 
 They propose a few moves that one can make to an existing solution (tracking graph) (arboresence?) without violating any constraints.
-One of those moves is MLT specific - coalescing multiple detections into one. They also reference [Kernhigan Lin updates](KL) which they use to improve
+One of those moves is MLT specific - coalescing multiple detections into one. They also reference [Kernhigan Lin updates](^KL) which they use to improve
 the greedy solution between frame pairs? 
 
 
 
-
-
-
-[KL]: W. Kernighan and S. Lin. An efficient heuristic proce- dure for partitioning graphs. Bell system technical journal
+[^KL]: W. Kernighan and S. Lin. An efficient heuristic procedure for partitioning graphs. Bell system technical journal
 
 
 

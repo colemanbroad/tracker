@@ -316,15 +316,15 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
 
     // Everything starts off noncovered
     var link_state = try aa.alloc(LinkState, n * m);
-    for (link_state) |*v| v.* = .noncovered;
+    for (link_state) |*v| v.* = .none;
 
     // Link state description over `m` in dim 1
     var vert_cover_m = try aa.alloc(RowColState, n);
-    for (vert_cover_m) |*v| v.* = .none;
+    for (vert_cover_m) |*v| v.* = .noncovered;
 
     // Link state description over `n` in dim 0
     var vert_cover_n = try aa.alloc(RowColState, n);
-    for (vert_cover_n) |*v| v.* = .none;
+    for (vert_cover_n) |*v| v.* = .noncovered;
 
     // Temp state keeps track of rows and columns where we've found stars
     // during this (greedy) search.
@@ -377,7 +377,7 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
             if (vert_cover_n[j] != .noncovered) continue;
 
             // we've found a noncovered zero, so prime it!
-            link_state[i * n + j] = .prime;
+            link_state[i * n + j] = .primed;
 
             // now check for stars in that row. if there aren't any then break to step 5.
             if (vert_star_m[i] != .starred) break :outer;
@@ -388,6 +388,7 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
                 for (0..n) |col| {
                     if (link_state[i * n + col] == .starred) break :blk col;
                 }
+                unreachable;
             };
             vert_cover_m[i] = .covered;
             vert_cover_n[column_with_star] = .noncovered;

@@ -141,7 +141,7 @@ fn buildTree(pts: []Pt, bounding_volume: Volume) !*NodeUnion {
     const span = ndMinMax(pts);
 
     // find median point P along the axis with greater variance
-    const idx = pt_argmax(v2(span.max) - v2(span.min));
+    const idx = ptArgmax(v2(span.max) - v2(span.min));
     std.sort.heap(Pt, pts, idx, ltPtsIdx);
     const midpoint = pts[pts.len / 2];
 
@@ -188,7 +188,7 @@ fn argmax(comptime T: type, arr: []T) struct { max: T, arg: u32 } {
 }
 
 // !!! WARN TODO only works with ndim==2
-fn pt_argmax(v: Pt) u8 {
+fn ptArgmax(v: Pt) u8 {
     const m = @max(v[0], v[1]);
     if (v[0] == m) return 0;
     return 1;
@@ -239,8 +239,8 @@ fn drawTree(root: *NodeUnion) !void {
             else => unreachable,
         };
 
-        const x = @floatToInt(i32, n_pt[0] * 750 + 25);
-        const y = @floatToInt(i32, n_pt[1] * 750 + 25);
+        const x = @as(i32, @intFromFloat(n_pt[0] * 750 + 25));
+        const y = @as(i32, @intFromFloat(n_pt[1] * 750 + 25));
 
         print("{any}", .{n});
 
@@ -252,12 +252,12 @@ fn drawTree(root: *NodeUnion) !void {
 
             const line: [2][2]i32 = switch (n.Split.dim) {
                 0 => .{
-                    .{ x, @floatToInt(i32, bv.min[1] * 750 + 25) },
-                    .{ x, @floatToInt(i32, bv.max[1] * 750 + 25) },
+                    .{ x, @as(i32, @intFromFloat(bv.min[1] * 750 + 25)) },
+                    .{ x, @as(i32, @intFromFloat(bv.max[1] * 750 + 25)) },
                 },
                 1 => .{
-                    .{ @floatToInt(i32, bv.min[0] * 750 + 25), y },
-                    .{ @floatToInt(i32, bv.max[0] * 750 + 25), y },
+                    .{ @as(i32, @intFromFloat(bv.min[0] * 750 + 25)), y },
+                    .{ @as(i32, @intFromFloat(bv.max[0] * 750 + 25)), y },
                 },
                 else => unreachable,
             };
@@ -587,10 +587,10 @@ pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []const T, qu
             im.drawLineInBounds(
                 [4]u8,
                 win.pix,
-                @floatToInt(i32, query_point[0] * 750 + 25),
-                @floatToInt(i32, query_point[1] * 750 + 25),
-                @floatToInt(i32, current_pt[0] * 750 + 25),
-                @floatToInt(i32, current_pt[1] * 750 + 25),
+                @as(i32, @intFromFloat(query_point[0] * 750 + 25)),
+                @as(i32, @intFromFloat(query_point[1] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[0] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
             win.awaitKeyPressAndUpdateWindow();
@@ -626,10 +626,10 @@ pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []const T, qu
             im.drawLineInBounds(
                 [4]u8,
                 win.pix,
-                @floatToInt(i32, query_point[0] * 750 + 25),
-                @floatToInt(i32, query_point[1] * 750 + 25),
-                @floatToInt(i32, current_pt[0] * 750 + 25),
-                @floatToInt(i32, current_pt[1] * 750 + 25),
+                @as(i32, @intFromFloat(query_point[0] * 750 + 25)),
+                @as(i32, @intFromFloat(query_point[1] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[0] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
 
@@ -685,10 +685,10 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
             im.drawLineInBounds(
                 [4]u8,
                 win.pix,
-                @floatToInt(i32, query_point[0] * 750 + 25),
-                @floatToInt(i32, query_point[1] * 750 + 25),
-                @floatToInt(i32, current_pt[0] * 750 + 25),
-                @floatToInt(i32, current_pt[1] * 750 + 25),
+                @as(i32, @intFromFloat(query_point[0] * 750 + 25)),
+                @as(i32, @intFromFloat(query_point[1] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[0] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
             win.awaitKeyPressAndUpdateWindow();
@@ -724,10 +724,10 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
             im.drawLineInBounds(
                 [4]u8,
                 win.pix,
-                @floatToInt(i32, query_point[0] * 750 + 25),
-                @floatToInt(i32, query_point[1] * 750 + 25),
-                @floatToInt(i32, current_pt[0] * 750 + 25),
-                @floatToInt(i32, current_pt[1] * 750 + 25),
+                @as(i32, @intFromFloat(query_point[0] * 750 + 25)),
+                @as(i32, @intFromFloat(query_point[1] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[0] * 750 + 25)),
+                @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
 
@@ -819,8 +819,8 @@ pub fn main() !u8 {
         win = try sdlw.Window.init(1000, 800);
         // win.markBounds();
         for (pts) |p| {
-            const x = @floatToInt(i32, p[0] * 750 + 25);
-            const y = @floatToInt(i32, p[1] * 750 + 25);
+            const x = @as(i32, @intFromFloat(p[0] * 750 + 25));
+            const y = @as(i32, @intFromFloat(p[1] * 750 + 25));
             im.drawCircle([4]u8, win.pix, x, y, 3, .{ 255, 255, 255, 255 });
         }
         try win.update();
