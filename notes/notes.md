@@ -286,6 +286,11 @@ brute  { 0.5794406533241272, 0.7830010652542114 }
 sorted { 0.5841493606567383, 0.7933627367019653 }
 ```
 
+## Samply
+
+This [tool](https://github.com/mstange/samply) is dead simple to use. Worked the first time. Intuitive. Easy.
+`samply record ./zig-out/bin/exe-kdtree2d` pops open a browser window to view sampled stacks
+
 ## Summary
 
 There are at least two different things we were trying to do by profiling.
