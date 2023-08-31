@@ -376,12 +376,12 @@ test "test GridHash2" {
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const al = gpa.allocator();
-    try init_gridhash_basic(al);
+    try initGridhashBasic(al);
 }
 
 // The most basic kind of grid hash. Evenly spaced (anisotropic) grid lines.
 // We don't know how large to mak each sector in advance. Just use a
-fn init_gridhash_basic(al: std.mem.Allocator) !void {
+fn initGridhashBasic(al: std.mem.Allocator) !void {
     var pts: [100]Vec2 = undefined;
     for (&pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
 
@@ -395,7 +395,7 @@ fn init_gridhash_basic(al: std.mem.Allocator) !void {
 
 // The balanced gridhash determines a set of grid lines that divide points up
 // evenly into bins of differing size.
-fn init_gridhash_balanced(al: std.mem.Allocator, pts: []Vec2) !void {
+fn initGridhashBalanced(al: std.mem.Allocator, pts: []Vec2) !void {
     _ = al;
 
     // Sort pts along one dimension
@@ -408,12 +408,12 @@ fn init_gridhash_balanced(al: std.mem.Allocator, pts: []Vec2) !void {
     _ = N;
 }
 
-test "init_gridhash_balanced" {
+test "initGridhashBalanced" {
     var pts: [100]Vec2 = undefined;
     for (&pts) |*p| p.* = .{ random.float(f32) * 20, random.float(f32) * 20 };
     const al = std.testing.allocator;
-    // const gh = try init_gridhash_balanced(al, pts);
-    const gh = try init_gridhash_basic(al);
+    // const gh = try initGridhashBalanced(al, pts);
+    const gh = try initGridhashBasic(al);
     _ = gh;
     const p_query = Vec2{ 10, 10 };
     _ = p_query;
