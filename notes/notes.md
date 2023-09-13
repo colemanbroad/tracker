@@ -22,31 +22,22 @@
 -[x] Evaluate actual tracking performance
 -[x] replace O(n^2)-space container for temporal edges
 -[x] fast spatial nn data struct. grid hash / KDTree / other
-    -[ ] add index fields to KD Tree struct
-    -[ ] `findNearestNeibFromSortedList()` should first bin by Y then sort by X. 
+    -[skip] [add index fields to KD Tree struct]
+    -[ ] `findNearestNeibFromSortedList()` should first bin by Y then sort by X. This generalizes to higher dimensions.
 
-
-
--[ ] Implement the scoring functions in Zig.
--[ ] Implement a Tracking type and a DetectionTimeseries type.
+-[ ] Implement the scoring functions in Zig (Det, Seg, Tra)
+-[skip] [Fast, brute force search of tracking solutions with brute force search.]
+-[x] [Implement a Tracking type]
+-[x] ~use DAG for temporal edge graph.~ enable tracking multiple timepoints 
+-[ ] Implement a DetectionTimeseries type.
 -[ ] Figure out how to move more complex types across the Zig / Python boundary.
--[ ] Fast, brute force search of tracking solutions with brute force search.
 
--[x] Tracy profiling
--[x] XCode Instruments Profiling
--[x] Custom profiling
--[ ] more efficient way to find first conflicting triangle?
--[ ] speed test suite
--[ ] delaunay 3D
--[ ] multiple implementations
--[ ] better geometric datastructure with fewer hashes.
-    -[ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster / more space efficient than 
 
--[ ] routines to rasterize continuous shapes
--[ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
-
+-[ ] parse and track real ISBI data
+-[ ] move cpnet3 tracking experiments to zig
 -[ ] show flow direction in tracking images
--[ ] use DAG for temporal edge graph. enable tracking multiple timepoints.
+-[ ] replace voronoi with other NN lookup (e.g. knn)
+-[ ] add k param to nn lookup datastructs
 -[ ] use grid_hash for faster NN lookup when building tracking DAG.
 -[ ] expand $c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2$ and simplify
 -[ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
@@ -56,7 +47,29 @@
 -[ ] StarryNite
 -[ ] Fast Matching
 -[ ] Marching cubes
+-[ ] Very Fast StrainCost Tracking
 
+
+## Profiling 
+
+-[x] Tracy profiling
+-[x] XCode Instruments Profiling
+-[x] Custom profiling
+-[ ] speed test suite
+
+## Delaunay triangulation
+
+-[ ] more efficient way to find first conflicting triangle?
+-[ ] delaunay 3D
+-[ ] multiple implementations
+-[ ] better geometric datastructure with fewer hashes.
+    -[ ] maybe a `[pts][N_tri]u32` which maps each point to a list of triangles it is a part of. potentially faster
+and more space efficient than ... 
+
+## Drawing 
+
+-[ ] [Rasterizing continuous shapes]
+-[ ] "debug mode" for rasterizers/images which helps with subpixel precision (draws everything at 10x ? uses SVG ?).
 
 
 # Questions
@@ -73,11 +86,9 @@ exe.linkSystemLibraryName("curl");
 
 
 
-# Very Fast StrainCost Tracking
-
 # Rasterizing continuous shapes
 
-I could do everything my self in my own little rendered and try to get everything pixel perfect. Or I could try to use an SVG library. Or TinyVG.
+I could do everything my self in my own little renderer and try to get everything pixel perfect. Or I could try to use an SVG library. Or TinyVG.
 
 # equality testing
 
@@ -133,14 +144,24 @@ const gh = euclidean.dim3.GridHash()
 
 May 30 2023
 
-The gridhash is a great idea that makes it easy to find nearest neibs. But we don't know the optimal grid density ahead of time, so we have to guess or learn from the data, or determine it on the fly. I think we'll know the total number of points and the image shape ahead of time, so that allows us to compute an average density, which allows us to compute a bin size given an expected number of objects per bin. The number of objects won't change over the lifetime of this datastructure, which is also very useful. Alternatively, we can just sort the points by a single coordinate, which still helps with nearest neib search! Double-alternatively we can sort the points by a single coordinate within a grid window, then sort the grid squares into rows by the opposite coordinate, then sort the rows into a full grid by the 1st coordinate again.... This is like a grid hash. 
+The gridhash is a great idea that makes it easy to find nearest neibs. But we don't know the optimal grid density ahead
+of time, so we have to guess or learn from the data, or determine it on the fly. I think we'll know the total number of
+points and the image shape ahead of time, so that allows us to compute an average density, which allows us to compute
+a bin size given an expected number of objects per bin. The number of objects won't change over the lifetime of this
+datastructure, which is also very useful. Alternatively, we can just sort the points by a single coordinate, which
+still helps with nearest neib search! Double-alternatively we can sort the points by a single coordinate within a grid
+window, then sort the grid squares into rows by the opposite coordinate, then sort the rows into a full grid by the 1st
+oordinate again.... This is like a grid hash.
 
 Within a grid cell we brute force compute distance to every point. 
 
 We could sort the points in a dense array `[N]Pt` by gridcell, then have a `GridCell -> []Pt` function that knows where the points are for a given grid cell. 
 
-We could sort by X, then break X into Nx percentiles where we determine the location of grid spacing by the real data. Then within the n-th percentile we sort by Y instead of X, then do the same thing breaking Y up into dynamically
-spaced grid. Then we have a lookup that maps an arbitrary point (x,y) to first an x index, then a specific y index for that x. This allows us to have roughly the same number of objects in every grid cell by using dynamic spacing! And it's still very fast to build. see diagram.
+We could sort by X, then break X into Nx percentiles where we determine the location of grid spacing by the real data.
+Then within the n-th percentile we sort by Y instead of X, then do the same thing breaking Y up into dynamically spaced
+grid. Then we have a lookup that maps an arbitrary point (x,y) to first an x index, then a specific y index for that x.
+This allows us to have roughly the same number of objects in every grid cell by using dynamic spacing! And it's still
+very fast to build. see diagram.
 
 ```python
 
@@ -434,13 +455,23 @@ They propose a few moves that one can make to an existing solution (tracking gra
 One of those moves is MLT specific - coalescing multiple detections into one. They also reference [Kernhigan Lin updates](^KL) which they use to improve
 the greedy solution between frame pairs? 
 
-
-
 [^KL]: W. Kernighan and S. Lin. An efficient heuristic procedure for partitioning graphs. Bell system technical journal
 
+# [add index fields to KD Tree struct]
 
+This still needs to be done, but I don't know why it hasn't been an issue thus far? 
+Why don't we need to do this when running our speed tests?
+A: We only need the indexed version of KDTree (based on `NodeIdx`) for NN queries for _tracking_.
+Since we already know that the `findNearestNeibFromSortedList()` does a better job we just use that.
 
+# [Implement a Tracking type]
 
+We chose to implement a tracking type `Tracking2D` that is very space efficient.
+It's almost generic and independent of dimension, but it depends on the dim
+of the `Pt` type which we hardcode to be 2. 
 
+# [Fast, brute force search of tracking solutions with brute force search.]
 
-
+This is a fools errand. I've implemented a brute force search over permutations. see `tracker.enumeratePermutations()`.
+The combinatorial explosion makes this impossible. Printing out 9! permutations of 9 takes 4 seconds. The same for 10 takes 40s, etc.
+ 
