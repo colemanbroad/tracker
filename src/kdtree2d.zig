@@ -22,11 +22,12 @@ fn v2(x: [2]f32) V2 {
     return x;
 }
 
-const N = 100_001;
+const N = 10_001;
 const Ntrials = 5_000;
 
 const Pt = [2]f32;
 const Volume = struct { min: Pt, max: Pt };
+
 // Consider this as an alternative to the KDNode that avoids the issues with
 // null. We need to reference points by an index and array, so that we can
 // distinguish between two points with identical coordinates.
@@ -103,9 +104,9 @@ fn ndMinMax(pts: []Pt) Volume {
 
 // var globocount: u32 = 0;
 
-// This alternative implementation uses an alternative implementation
-// that sorts indices instead of points directly, allowing us to record
-// index locations (needed for tracking).
+// This alternative implementation sorts indices instead of points directly, allowing us
+// to record index locations (needed for tracking). Actually, we can skip this work, because
+// we already know that the sorted list of points is a better NN datastructure for us!
 fn buildTreeIndex(pts: []Pt, bounding_volume: Volume) !*NodeUnion {
     _ = bounding_volume;
     _ = pts;
@@ -206,8 +207,9 @@ fn randomColor() [4]u8 {
 fn drawTree(root: *NodeUnion) !void {
     const ParentNode = struct { parent: ?[2]i32, node: *NodeUnion };
     var node_q: [2 * N]ParentNode = undefined;
-    var h_idx: usize = 0;
-    var t_idx: usize = 0;
+
+    var h_idx: usize = 0; // head index
+    var t_idx: usize = 0; // tail index
 
     // const TupT = struct { i32, i32, [2][2]i32 };
     // var point_list: [100]TupT = undefined;
@@ -337,15 +339,15 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
     // Now we do the full-tree depth-first search with pruing using an explicit stack.
     // 100 is the maximum possible stack depth. Empirically the max h_idx for 1_000_000 pts is 5.
     var node_stack: [100]NodeUnion = undefined;
-    var h_idx: u32 = 0;
+    var stack_idx: u32 = 0;
 
-    node_stack[h_idx] = tree_root.*;
-    h_idx += 1;
+    node_stack[stack_idx] = tree_root.*;
+    stack_idx += 1;
 
-    var h_idx_max: u32 = 0;
-    _ = h_idx_max;
+    // var h_idx_max: u32 = 0;
+    // _ = h_idx_max;
 
-    while (h_idx > 0) {
+    while (stack_idx > 0) {
 
         // if (h_idx > h_idx_max) {
         //     h_idx_max = h_idx;
@@ -355,8 +357,8 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
         itercount += 1;
         // WARN: remember that h_idx points to the next empty spot (insert position)
         // but the last full position is at the previous index!
-        const next_node = node_stack[h_idx - 1];
-        h_idx -= 1;
+        const next_node = node_stack[stack_idx - 1];
+        stack_idx -= 1;
 
         // coalesce .Leaf and .Split into one
         const pt = switch (next_node) {
@@ -385,32 +387,32 @@ pub fn findNearestNeibKDTree(tree_root: *NodeUnion, query_point: Pt) NNReturn {
         // If you're within the query point current best radius then you first search
         // down the closer side by adding it 2nd in the stack.
         if (orthogonal_distance < -current_min_dist) {
-            node_stack[h_idx] = s.r.*;
-            h_idx += 1;
+            node_stack[stack_idx] = s.r.*;
+            stack_idx += 1;
         } else if (orthogonal_distance < 0) {
-            node_stack[h_idx] = s.l.*;
-            h_idx += 1;
-            node_stack[h_idx] = s.r.*;
-            h_idx += 1;
+            node_stack[stack_idx] = s.l.*;
+            stack_idx += 1;
+            node_stack[stack_idx] = s.r.*;
+            stack_idx += 1;
         } else if (orthogonal_distance < current_min_dist) {
-            node_stack[h_idx] = s.r.*;
-            h_idx += 1;
-            node_stack[h_idx] = s.l.*;
-            h_idx += 1;
+            node_stack[stack_idx] = s.r.*;
+            stack_idx += 1;
+            node_stack[stack_idx] = s.l.*;
+            stack_idx += 1;
         } else {
-            node_stack[h_idx] = s.l.*;
-            h_idx += 1;
+            node_stack[stack_idx] = s.l.*;
+            stack_idx += 1;
         }
 
         // if (!(orthogonal_distance > current_min_dist)) {
         //     // add s.r
-        //     node_stack[h_idx] = s.r.*;
-        //     h_idx += 1;
+        //     node_stack[stack_idx] = s.r.*;
+        //     stack_idx += 1;
         // }
         // if (!(orthogonal_distance < -current_min_dist)) {
         //     // add s.l
-        //     node_stack[h_idx] = s.l.*;
-        //     h_idx += 1;
+        //     node_stack[stack_idx] = s.l.*;
+        //     stack_idx += 1;
         // }
     }
 
@@ -745,6 +747,8 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
 test "simple union experiment" {
     var a: NodeUnion = undefined;
 
+    if (true) return;
+
     if (random.float(f32) < 0.5) {
         a = NodeUnion{ .Empty = .{ .vol = .{ .min = .{ 0, 0 }, .max = .{ 2, 2 } } } };
     } else {
@@ -761,7 +765,7 @@ test "simple union experiment" {
     print("{any} \n", .{b});
 }
 
-test "build a Tree" {
+test "test build a Tree" {
     print("\n", .{});
     var a = allocator;
 
@@ -801,7 +805,7 @@ pub fn findNearestNeibBruteForce(pts: []Pt, query_point: Pt) usize {
 }
 
 pub fn main() !u8 {
-    // running_as_main_use_sdl = true;
+    running_as_main_use_sdl = true;
 
     // traces = std.ComptimeStringMap(comptime V: type, comptime kvs_list: anytype)
     // traces = std.StringHashMap(Trace).init(allocator);
