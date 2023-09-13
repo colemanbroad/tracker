@@ -123,7 +123,7 @@ fn enumeratePermutations(arr: []u32) !void {
 
 test "test enumeratePermutations" {
     print("\n", .{});
-    const n: u32 = 9;
+    const n: u32 = 10;
     var arr = try allocator.alloc(u32, n);
     for (arr, 0..) |*a, i| a.* = @as(u32, @intCast(i));
 
@@ -139,7 +139,7 @@ fn distEuclid(comptime T: type, x: T, y: T) f32 {
 }
 
 // Runs assignment over each consecutive pair of pointclouds in time order.
-pub fn trackOverFramePairs(tracking: Tracking2D) !void {
+pub fn trackOverFramePairs(tracking: Tracking) !void {
 
     // sort by (time, x-coord)
     // this is necessary for
@@ -172,8 +172,8 @@ pub fn trackOverFramePairs(tracking: Tracking2D) !void {
         drawPts(trackslice_curr, .{ 255, 0, 0, 255 });
 
         // try linkFramesGreedyDumb(trackslice_prev, trackslice_curr);
-        // try linkFramesGreedy(trackslice_prev, trackslice_curr);
-        try linkFramesMunkes(trackslice_prev, trackslice_curr);
+        try linkFramesGreedy(trackslice_prev, trackslice_curr);
+        // try linkFramesMunkes(trackslice_prev, trackslice_curr);
 
         // Draw teal lines showing connectionsn
         drawLinks(trackslice_curr, tracking, .{ 255, 255, 0, 255 });
@@ -197,7 +197,7 @@ pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
     }
 }
 
-pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking2D, color: [4]u8) void {
+pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking, color: [4]u8) void {
     if (win) |*w| {
         for (trackslice) |*p| {
             if (p.parent_id) |pid| {
@@ -610,7 +610,7 @@ pub fn linkFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_cur
 
 const TrackedCell = struct { pt: Pt, id: u32, time: u16, parent_id: ?u32 };
 
-const Tracking2D = struct {
+const Tracking = struct {
     items: []TrackedCell,
 
     const TimeCount = struct { time: u16, count: u16, cum: u32 };
@@ -684,7 +684,7 @@ pub fn pt2screen(p: Pt) [2]i32 {
 pub fn main() !void {
     try sdlw.initSDL();
     defer sdlw.quitSDL();
-    // win = try sdlw.Window.init(1000, 800);
+    win = try sdlw.Window.init(1000, 800);
 
     tracer = try Tracer(100).init();
 
@@ -697,7 +697,7 @@ pub fn main() !void {
 }
 
 // Generate a simulated lineage with cells, divisions and apoptosis.
-pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking2D {
+pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
     var tracking = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
     var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, 100);
     const jumpdist: f32 = 0.1;
