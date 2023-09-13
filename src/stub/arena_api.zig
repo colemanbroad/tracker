@@ -19,7 +19,7 @@ test {
 
 fn newpts(al: std.mem.Allocator, size: u32) ![][2]f32 {
     var pts = try al.alloc([2]f32, size);
-    for (pts, 0..) |*p, i| p.* = .{ @intToFloat(f32, i), @intToFloat(f32, i * i) };
+    for (pts, 0..) |*p, i| p.* = .{ @as(f32, @floatFromInt(i)), @as(f32, @floatFromInt(i * i)) };
     return pts;
 }
 

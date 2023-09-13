@@ -1,5 +1,7 @@
 // A datastructure that efficiently encodes a sparsely connected graph
 
+const Allocator = @import("std").mem.Allocator;
+const Vec2 = @Vector(2, f32);
 // convert triangles into vertex-vertex mapping
 // each vertex has it's own array of size [10]u32 . array[0] stores #elements array[1..10] store neib id's
 
@@ -24,11 +26,11 @@ pub fn V2VGraph(comptime depth: u8) type {
 
         pub fn fromTriangles(self: Self, triangles: [][3]Vec2) void {
             for (triangles) |tri| {
-                for (tri) |v, i| {
+                for (tri, 0..) |v, i| {
                     outer: for ([3]u32{ 0, 1, 2 }) |j| {
                         if (i == j) continue;
                         const v_neib = tri[j];
-                        for (self.map[v]) |v_neib_existing, k| {
+                        for (self.map[v], 0..) |v_neib_existing, k| {
                             if (v_neib_existing == null) {
                                 self.map[v][k] = v_neib;
                                 self.dist[v][k] = dist(Pts, va[v], va[v_neib]); // squared euclidean
@@ -53,7 +55,7 @@ pub fn V2VGraph(comptime depth: u8) type {
                     }
                 }
             }
-            return ad / @intToFloat(f32, count);
+            return ad / @as(f32, @floatFromInt(count));
         }
     };
 }
