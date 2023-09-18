@@ -5,7 +5,7 @@ const assert = std.debug.assert;
 const min = std.math.min;
 const max = std.math.max;
 
-var prng = std.rand.DefaultPrng.init(0);
+var prng = std.rand.DefaultPrng.init(1);
 const random = prng.random();
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
@@ -40,41 +40,37 @@ pub fn log(
     logfile.close();
 }
 
-// const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/track/";
+// const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/track/";
 // test {
 //     // std.testing.refAllDecls(@This());
 // }
 
-// procedure generate(n : integer, A : array of any):
-//     // c is an encoding of the stack state. c[k] encodes the for-loop counter for when generate(k - 1, A) is called
-//     c : array of int
+// This function takes the path of an LBEP file which has Labels, Begin, End, and Parent.
+// It's a way of encoding a tracking.
+// We need the centerpoints associated with each object in the tracking to really work with
+// this data. Maybe we can do the initial loading and parsing with existing python tools,
+// and then we can write it in a format similar to our existing Tracking...
 
-//     for i := 0; i < n; i += 1 do
-//         c[i] := 0
-//     end for
+// A Tracking is a slice of TrackedCell, which has a point, id, time, and parent_id...
+// We can make a data structure that has all of this information and pass it from python.
+// Or save it to disk.
 
-//     output(A)
+// const TrackedCell = struct { pt: Pt, id: u32, time: u16, parent_id: ?u32 };
 
-//     // i acts similarly to a stack pointer
-//     i := 1;
-//     while i < n do
-//         if  c[i] < i then
-//             if i is even then
-//                 swap(A[0], A[i])
-//             else
-//                 swap(A[c[i]], A[i])
-//             end if
-//             output(A)
-//             // Swap has occurred ending the for-loop. Simulate the increment of the for-loop counter
-//             c[i] += 1
-//             // Simulate recursive call reaching the base case by bringing the pointer to the base case analog in the array
-//             i := 1
-//         else
-//             // Calling generate(i+1, A) has ended as the for-loop terminated. Reset the state and simulate popping the stack by incrementing the pointer.
-//             c[i] := 0
-//             i += 1
-//         end if
-//     end while
+//
+// const TrackedCellJson = struct { time: u32, id: i32, pt: [2]u16, parent_id: [2]i32, isbi_id: i32 };
+const TrackedCellJson = struct { time: u32, id: i32, pt: Pt, parent_id: [2]i32, isbi_id: i32 };
+
+fn getTrackedCells(al: Allocator) !std.json.Parsed([]TrackedCellJson) {
+    const s = @embedFile("tracked_cells.json");
+    const parsedData = try std.json.parseFromSlice([]TrackedCellJson, al, s[0..], .{});
+    return parsedData;
+    // defer parsedData.deinit();
+}
+
+// fn load_isbi_data(dir: []const u8) !void {
+//     _ = dir;
+// }
 
 // Robert Sedgewick's non-recursive permutation algorithm
 // https://sedgewick.io/wp-content/uploads/2022/03/2002PermGeneration.pdf
@@ -138,6 +134,12 @@ fn distEuclid(comptime T: type, x: T, y: T) f32 {
     };
 }
 
+pub const cc = struct {
+    pub usingnamespace @cImport({
+        @cInclude("SDL2/SDL.h");
+    });
+};
+
 // Runs assignment over each consecutive pair of pointclouds in time order.
 pub fn trackOverFramePairs(tracking: Tracking) !void {
 
@@ -154,40 +156,65 @@ pub fn trackOverFramePairs(tracking: Tracking) !void {
 
     std.sort.heap(TrackedCell, tracking.items, {}, lt);
 
-    const timebounds = try tracking.getTimeboundsOfSorted(allocator);
-    defer allocator.free(timebounds);
+    var timebounds = try tracking.getTimeboundsOfSorted(allocator);
+    defer timebounds.deinit();
 
     // iterate over all frame pairs
-    var t0_start: u32 = 0;
-    for (0..timebounds.len - 1) |tb_idx| {
-        const t0_end = timebounds[tb_idx].cum;
-        const t1_end = timebounds[tb_idx + 1].cum;
-        defer t0_start = t0_end;
+    var tb_idx: u16 = 0;
 
-        const trackslice_prev = tracking.items[t0_start..t0_end];
-        const trackslice_curr = tracking.items[t0_end..t1_end];
+    while (true) {
+        const tb_zero = if (timebounds.get(tb_idx + 0)) |x| x else break;
+        const tb_one = if (timebounds.get(tb_idx + 1)) |x| x else break;
+        const tb_two = if (timebounds.get(tb_idx + 2)) |x| x else break;
 
-        // Clear the screen. Draw prev pts in green, curr pts in blue.
-        drawPts(trackslice_prev, .{ 0, 255, 0, 255 });
-        drawPts(trackslice_curr, .{ 255, 0, 0, 255 });
+        const trackslice_zero = tracking.items[tb_zero.start..tb_zero.stop];
+        const trackslice_one = tracking.items[tb_one.start..tb_one.stop];
+        const trackslice_two = tracking.items[tb_two.start..tb_two.stop];
 
-        // try linkFramesGreedyDumb(trackslice_prev, trackslice_curr);
-        try linkFramesGreedy(trackslice_prev, trackslice_curr);
-        // try linkFramesMunkes(trackslice_prev, trackslice_curr);
+        print("lengths zero {} one {} two {} \n", .{ trackslice_zero.len, trackslice_one.len, trackslice_two.len });
+        print("Timebounds zero {[start]} {[stop]}\n", tb_zero);
+        print("Timebounds one {[start]} {[stop]}\n\n", tb_one);
+        print("Timebounds two {[start]} {[stop]}\n\n", tb_two);
+
+        // Clear the screen and draw circes at each cell.
+        for (win.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+        drawPts(trackslice_zero, .{ 0, 255, 0, 255 });
+        drawPts(trackslice_one, .{ 0, 50, 200, 255 });
+        drawPts(trackslice_two, .{ 200, 50, 0, 255 });
+
+        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
+        try linkFramesGreedy(trackslice_zero, trackslice_one);
+        try linkFramesGreedy(trackslice_one, trackslice_two);
+        // try linkFramesMunkes(trackslice_zero, trackslice_one);
+
+        drawLinksToParent(trackslice_one, tracking, .{ 0, 50, 200, 255 });
+        drawLinksToParent(trackslice_two, tracking, .{ 200, 50, 0, 255 });
+        win.?.update() catch unreachable;
 
         // Draw teal lines showing connectionsn
-        drawLinks(trackslice_curr, tracking, .{ 255, 255, 0, 255 });
+        if (win) |*w| {
+            const key = w.awaitKeyPress();
+            switch (key) {
+                cc.SDLK_h => tb_idx -|= 1,
+                cc.SDLK_l => tb_idx +|= 1,
+                else => {},
+            }
+        } else {
+            tb_idx += 1;
+        }
 
-        // try linkFramesNearestNeib(trackslice_prev, trackslice_curr);
+        // if (tb_idx < 0) tb_idx = 0;
+        // if (tb_idx == timebounds.len - 1) break;
+
+        // try linkFramesNearestNeib(trackslice_zero, trackslice_one);
 
         // // Draw red lines for connections
-        // drawLinks(trackslice_curr, tracking, .{ 0, 0, 255, 255 });
+        // drawLinks(trackslice_one, tracking, .{ 0, 0, 255, 255 });
     }
 }
 
 pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
     if (win) |w| {
-        for (w.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
         for (trackslice) |p| {
             const x = @as(i32, @intFromFloat(p.pt[0] * 750 + 25));
             const y = @as(i32, @intFromFloat(p.pt[1] * 750 + 25));
@@ -197,7 +224,7 @@ pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
     }
 }
 
-pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking, color: [4]u8) void {
+pub fn drawLinksToParent(trackslice: []TrackedCell, tracking: Tracking, color: [4]u8) void {
     if (win) |*w| {
         for (trackslice) |*p| {
             if (p.parent_id) |pid| {
@@ -209,7 +236,6 @@ pub fn drawLinks(trackslice: []TrackedCell, tracking: Tracking, color: [4]u8) vo
                 im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, color);
             }
         }
-        w.awaitKeyPressAndUpdateWindow();
     }
 }
 
@@ -608,14 +634,19 @@ pub fn linkFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_cur
     }
 }
 
+// This ID type aligns with data coming from python world
+const CellID = struct { u16, u32 }; // Time, ID
 const TrackedCell = struct { pt: Pt, id: u32, time: u16, parent_id: ?u32 };
+// const TrackedCell = struct { pt: Pt, id: CellID, time: u16, parent_id: ?CellID };
 
 const Tracking = struct {
     items: []TrackedCell,
 
-    const TimeCount = struct { time: u16, count: u16, cum: u32 };
+    // const TimeCount = struct { time: u16, count: u16, cum: u32, start_id: u32, stopd_id: u32 };
+    const TimeBound = struct { start: u32, stop: u32 };
 
-    pub fn getTimeboundsOfSorted(this: @This(), a: Allocator) ![]TimeCount {
+    // pub fn getTimeboundsOfSorted(this: @This(), a: Allocator) ![]TimeCount {
+    pub fn getTimeboundsOfSorted(this: @This(), a: Allocator) !std.AutoArrayHashMap(u16, TimeBound) {
         const tracking = this.items;
 
         // sort by (time, x-coord)
@@ -634,34 +665,50 @@ const Tracking = struct {
 
         // then find time boundaries
         // Can't be longer than this. times are discrete and >= 0.
-        var timebounds = try a.alloc(TimeCount, tracking[tracking.len - 1].time + 1);
+        // var timebounds = try a.alloc(TimeCount, tracking[tracking.len - 1].time + 1);
         // defer allocator.free(timebounds);
-
-        for (timebounds) |*v| {
-            v.count = 0;
-            v.cum = 0;
+        var count_cells_per_time = std.AutoArrayHashMap(u16, u32).init(a);
+        for (tracking) |cell| {
+            const val = if (count_cells_per_time.get(cell.time)) |c| c else 0;
+            try count_cells_per_time.put(cell.time, val + 1);
         }
+        defer count_cells_per_time.deinit();
 
-        // initialize with the first object
-        timebounds[0].time = tracking[0].time;
-        timebounds[0].count += 1;
-        timebounds[0].cum += 1;
-
-        // fill up time bounds
-        {
-            var tb_idx: u16 = 0;
-            for (1..tracking.len) |tr_idx| {
-                if (tracking[tr_idx].time > tracking[tr_idx - 1].time) {
-                    tb_idx += 1;
-                    timebounds[tb_idx].time = tracking[tr_idx].time;
-                    timebounds[tb_idx].cum = timebounds[tb_idx - 1].cum;
-                }
-                timebounds[tb_idx].count += 1;
-                timebounds[tb_idx].cum += 1;
-            }
+        var idx_start: u32 = 0;
+        var time_to_idx = std.AutoArrayHashMap(u16, TimeBound).init(a);
+        var it = count_cells_per_time.iterator();
+        while (it.next()) |kv| {
+            const idx_stop = idx_start + kv.value_ptr.*;
+            try time_to_idx.put(kv.key_ptr.*, .{ .start = idx_start, .stop = idx_stop });
+            idx_start = idx_stop;
         }
+        return time_to_idx;
 
-        return timebounds;
+        // for (timebounds) |*v| {
+        //     v.count = 0;
+        //     v.cum = 0;
+        // }
+
+        // // initialize with the first object
+        // timebounds[0].time = tracking[0].time;
+        // timebounds[0].count += 1;
+        // timebounds[0].cum += 1;
+
+        // // fill up time bounds
+        // {
+        //     var tb_idx: u16 = 0;
+        //     for (1..tracking.len) |tr_idx| {
+        //         if (tracking[tr_idx].time > tracking[tr_idx - 1].time) {
+        //             tb_idx += 1;
+        //             timebounds[tb_idx].time = tracking[tr_idx].time;
+        //             timebounds[tb_idx].cum = timebounds[tb_idx - 1].cum;
+        //         }
+        //         timebounds[tb_idx].count += 1;
+        //         timebounds[tb_idx].cum += 1;
+        //     }
+        // }
+
+        // return timebounds;
     }
 
     pub fn getID(this: @This(), id: u32) ?TrackedCell {

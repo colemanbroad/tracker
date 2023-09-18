@@ -151,23 +151,26 @@ pub const Window = struct {
     // Use this in combination with drawing to the window to visually step
     // through algorithms! This is the standard basic event loop, but should
     // be overridden for more interactivity.
-    pub fn awaitKeyPressAndUpdateWindow(self: *This) void {
-        if (self.must_quit) return;
+    pub fn awaitKeyPress(self: *This) i32 {
+        if (self.must_quit) return -1;
         while (true) {
             _ = cc.SDL_WaitEvent(&self.sdl_event);
             if (self.sdl_event.type == cc.SDL_KEYDOWN) {
-                switch (self.sdl_event.key.keysym.sym) {
+                const key = self.sdl_event.key.keysym.sym;
+                switch (key) {
                     cc.SDLK_q => std.os.exit(0),
                     cc.SDLK_f => {
                         self.must_quit = true;
                     }, // finish
                     else => {
-                        self.update() catch {};
-                        break;
+                        // self.update() catch {};
+                        return key;
+                        // break;
                     },
                 }
             }
         }
+        return -1;
     }
 
     // fn setPixelsFromRectangle(this: *This, img: im.Img2D([4]u8), r: Rect) void {

@@ -222,7 +222,7 @@ fn drawTree(root: *NodeUnion) !void {
     h_idx += 1;
 
     while (t_idx < h_idx) {
-        win.awaitKeyPressAndUpdateWindow();
+        _ = win.awaitKeyPress();
 
         const p_and_n = node_q[t_idx];
         t_idx += 1;
@@ -595,7 +595,7 @@ pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []const T, qu
                 @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
-            win.awaitKeyPressAndUpdateWindow();
+            _ = win.awaitKeyPress();
         }
 
         if (idx == 0) break;
@@ -635,7 +635,7 @@ pub fn findNearestNeibFromSortedListGeneric(comptime T: type, pts: []const T, qu
                 color,
             );
 
-            win.awaitKeyPressAndUpdateWindow();
+            _ = win.awaitKeyPress();
         }
 
         idx_offset += 1;
@@ -693,7 +693,7 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
                 @as(i32, @intFromFloat(current_pt[1] * 750 + 25)),
                 color,
             );
-            win.awaitKeyPressAndUpdateWindow();
+            _ = win.awaitKeyPress();
         }
 
         if (idx == 0) break;
@@ -733,7 +733,7 @@ pub fn findNearestNeibFromSortedList(pts: []Pt, query_point: Pt) usize {
                 color,
             );
 
-            win.awaitKeyPressAndUpdateWindow();
+            _ = win.awaitKeyPress();
         }
 
         idx_offset += 1;
