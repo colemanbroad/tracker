@@ -11,7 +11,7 @@ const allocator = gpa.allocator();
 // pub var allocator = std.testing.allocator;
 // const root = @import("root");
 // const test_artifacts = @import("root").thisDir() ++ "test-artifacts/";
-const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/image_base/";
+const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/image_base/";
 
 test {
     std.testing.refAllDecls(@This());

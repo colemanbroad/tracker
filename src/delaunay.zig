@@ -13,7 +13,7 @@ const BBox = g.BBox;
 
 // const root = @import("root");
 // const test_artifacts = @import("root").thisDir() ++ "test-artifacts/";
-const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/track/";
+const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/track/";
 
 // const build_options = @import("build_options");
 // build_options.
@@ -430,7 +430,7 @@ pub fn main() !void {
     );
 }
 
-// const test_home = "/Users/broaddus/Desktop/work/zig-tracker/test-artifacts/tri_grid/";
+// const test_home = "/Users/broaddus/work/zig-tracker/test-artifacts/tri_grid/";
 
 // pub fn print2(
 //     comptime src_info: std.builtin.SourceLocation,

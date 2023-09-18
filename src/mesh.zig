@@ -34,7 +34,7 @@ const assert = std.debug.assert;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
-const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/mesh/";
+const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/mesh/";
 
 test {
     std.testing.refAllDecls(@This());

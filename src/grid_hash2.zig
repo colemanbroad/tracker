@@ -49,7 +49,7 @@ const V2i32 = @Vector(2, i32);
 const clipi = geo.clipi;
 const floor = std.math.floor;
 
-const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/grid_hash2/";
+const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/grid_hash2/";
 // const test_home = "../test-artifacts/grid_hash2/";
 
 pub const GridHash2 = struct {

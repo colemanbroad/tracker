@@ -420,7 +420,7 @@ pub fn sphereTrajectory() [100]Vec3 {
     return pts;
 }
 
-const test_home = "/Users/broaddus/Desktop/work/isbi/zig-tracker/test-artifacts/render/";
+const test_home = "/Users/broaddus/work/isbi/zig-tracker/test-artifacts/render/";
 
 test "cam3D. render stars with perspectiveProjection2()" {
     // pub fn main() !void {
