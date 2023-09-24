@@ -17,6 +17,7 @@ var tracer: Tracer(100) = undefined;
 // Get an SDL window we can use for visualizing algorithms.
 const sdlw = @import("sdl-window.zig");
 var win: ?sdlw.Window = null;
+var win_plot: ?sdlw.Window = null;
 const nn_tools = @import("kdtree2d.zig");
 
 const Pt3D = [3]f32;
@@ -144,6 +145,7 @@ const blue = .{ 255, 0, 0, 255 };
 const green = .{ 0, 255, 0, 255 };
 const red = .{ 0, 0, 255, 255 };
 const black = .{ 0, 0, 0, 255 };
+const white = .{ 255, 255, 255, 255 };
 
 // Runs assignment over each consecutive pair of pointclouds in time order.
 pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
@@ -190,31 +192,31 @@ pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
 
         // const orig_trackslice_zero = orig_tracking.items[tb_zero.start..tb_zero.stop];
         // _ = orig_trackslice_zero;
-        const orig_trackslice_one = orig_tracking.items[tb_one.start..tb_one.stop];
-        const orig_trackslice_two = orig_tracking.items[tb_two.start..tb_two.stop];
+        // const orig_trackslice_one = orig_tracking.items[tb_one.start..tb_one.stop];
+        // const orig_trackslice_two = orig_tracking.items[tb_two.start..tb_two.stop];
 
-        // try linkFramesGreedy(trackslice_zero, trackslice_one);
-        // try linkFramesGreedy(trackslice_one, trackslice_two);
-        drawLinksToParent(orig_trackslice_one, orig_tracking, red);
-        drawLinksToParent(orig_trackslice_two, orig_tracking, red);
+        // // try linkFramesGreedy(trackslice_zero, trackslice_one);
+        // // try linkFramesGreedy(trackslice_one, trackslice_two);
+        // drawLinksToParent(orig_trackslice_one, orig_tracking, red);
+        // drawLinksToParent(orig_trackslice_two, orig_tracking, red);
 
         const trackslice_zero = tracking.items[tb_zero.start..tb_zero.stop];
         const trackslice_one = tracking.items[tb_one.start..tb_one.stop];
         const trackslice_two = tracking.items[tb_two.start..tb_two.stop];
 
-        try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
-        try linkFramesGreedyDumb(trackslice_one, trackslice_two);
-
-        drawLinksToParent(trackslice_one, tracking, black);
-        drawLinksToParent(trackslice_two, tracking, black);
+        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
+        // try linkFramesGreedyDumb(trackslice_one, trackslice_two);
+        try linkFramesMunkes(trackslice_zero, trackslice_one);
+        try linkFramesMunkes(trackslice_one, trackslice_two);
+        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
 
         drawPts(trackslice_zero, blue);
         drawPts(trackslice_one, blue);
         drawPts(trackslice_two, green);
-        win.?.update() catch unreachable;
+        drawLinksToParent(trackslice_one, tracking, red);
+        drawLinksToParent(trackslice_two, tracking, red);
 
-        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
-        // try linkFramesMunkes(trackslice_zero, trackslice_one);
+        win.?.update() catch unreachable;
 
         if (win) |*w| {
             const key = w.awaitKeyPress();
@@ -296,52 +298,69 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
 // starring and priming zeros and by covering and uncovering rows and columns.
 // This is because, at the time of publication (1957), few people had access to
 // a computer and the algorithm was exercised by hand.
+const LinkState = enum { none, starred, primed };
+const RowColState = enum { noncovered, covered };
+
+pub fn drawMatrix(n0: usize, n1: usize, link_state: []const LinkState) void {
+    for (win_plot.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+    for (0..n0) |j0| {
+        for (0..n1) |j1| {
+            const x0 = 50 + @as(i32, @intCast(j0 * 20));
+            const y0 = 50 + @as(i32, @intCast(j1 * 20));
+
+            const r = 3;
+            const c = link_state[j0 * n1 + j1];
+            const color: [4]u8 = switch (c) {
+                .none => white,
+                .starred => blue,
+                .primed => green,
+            };
+            im.drawCircle([4]u8, win_plot.?.pix, x0, y0, r, color);
+        }
+    }
+    win_plot.?.update() catch unreachable;
+}
 
 pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
 
     // First we have to make an nxn grid of edge costs
     // Then an nxn grid of algorithm state for each edge
 
-    // @breakpoint();
-
     var _arena = std.heap.ArenaAllocator.init(allocator);
     defer _arena.deinit();
 
     const aa = _arena.allocator();
 
-    const n = trackslice_prev.len;
-    const m = trackslice_curr.len;
+    const n0 = trackslice_prev.len;
+    const n1 = trackslice_curr.len;
     // const k = @min()
 
-    var link_costs = try aa.alloc(f32, n * m);
+    var link_costs = try aa.alloc(f32, n0 * n1);
 
     // Generate costs
-    for (trackslice_prev, 0..) |v1, i| {
-        for (trackslice_curr, 0..) |v2, j| {
-            link_costs[i * m + j] = distEuclid(Pt, v1.pt, v2.pt);
+    for (trackslice_prev, 0..) |v0, j0| {
+        for (trackslice_curr, 0..) |v1, j1| {
+            link_costs[j0 * n1 + j1] = distEuclid(Pt, v0.pt, v1.pt);
         }
     }
 
-    var min_cost_prev = try aa.alloc(f32, n);
-    var min_cost_curr = try aa.alloc(f32, m);
-
-    // initialize with smallest possible value (cost must be >= 0)
-    for (min_cost_prev) |*c| c.* = 0;
-    for (min_cost_curr) |*c| c.* = 0;
-
-    // Find the min cost for rows and columns
-    for (trackslice_prev, 0..) |_, i| {
-        for (trackslice_curr, 0..) |_, j| {
-            const l = link_costs[i * m + j];
-            if (l < min_cost_prev[i]) min_cost_prev[i] = l;
-            if (l < min_cost_curr[j]) min_cost_curr[j] = l;
+    // Find min cost for rows and columns. Initialize with largest possible val
+    var min_cost_prev = try aa.alloc(f32, n0);
+    var min_cost_curr = try aa.alloc(f32, n1);
+    for (min_cost_prev) |*c| c.* = 1000;
+    for (min_cost_curr) |*c| c.* = 1000;
+    for (trackslice_prev, 0..) |_, j0| {
+        for (trackslice_curr, 0..) |_, j1| {
+            const l = link_costs[j0 * n1 + j1];
+            if (l < min_cost_prev[j0]) min_cost_prev[j0] = l;
+            if (l < min_cost_curr[j1]) min_cost_curr[j1] = l;
         }
     }
 
     // Subtract the min across `prev` from each `curr`
-    for (trackslice_prev, 0..) |_, i| {
-        for (trackslice_curr, 0..) |_, j| {
-            link_costs[i * m + j] -= min_cost_prev[i];
+    for (trackslice_prev, 0..) |_, j0| {
+        for (trackslice_curr, 0..) |_, j1| {
+            link_costs[j0 * n1 + j1] -= min_cost_prev[j0];
         }
     }
 
@@ -349,54 +368,57 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // in its row or column, star Z. Repeat for each element in the matrix.
     // Go to Step 3.
 
-    const LinkState = enum { none, starred, primed };
-    const RowColState = enum { noncovered, covered };
-
     // Everything starts off noncovered
-    var link_state = try aa.alloc(LinkState, n * m);
+    var link_state = try aa.alloc(LinkState, n0 * n1);
     for (link_state) |*v| v.* = .none;
 
     // Link state description over `m` in dim 1
-    var vert_cover_m = try aa.alloc(RowColState, n);
-    for (vert_cover_m) |*v| v.* = .noncovered;
+    var vert_cover_prev = try aa.alloc(RowColState, n0);
+    for (vert_cover_prev) |*v| v.* = .noncovered;
 
     // Link state description over `n` in dim 0
-    var vert_cover_n = try aa.alloc(RowColState, n);
-    for (vert_cover_n) |*v| v.* = .noncovered;
+    var vert_cover_curr = try aa.alloc(RowColState, n1);
+    for (vert_cover_curr) |*v| v.* = .noncovered;
 
     // Temp state keeps track of rows and columns where we've found stars
     // during this (greedy) search.
-    var vert_star_m = try aa.alloc(LinkState, m);
-    for (vert_star_m) |*v| v.* = .none; // unknown
-    var vert_star_n = try aa.alloc(LinkState, n);
-    for (vert_star_n) |*v| v.* = .none; // unknown
+    var vert_star_prev = try aa.alloc(LinkState, n0);
+    for (vert_star_prev) |*v| v.* = .none; // unknown
+    var vert_star_curr = try aa.alloc(LinkState, n1);
+    for (vert_star_curr) |*v| v.* = .none; // unknown
 
     // do step 2. greedily search through matrix elements and star them.
-    for (trackslice_prev, 0..) |_, i| {
-        for (trackslice_curr, 0..) |_, j| {
-            const c = link_costs[i * n + j];
+    for (trackslice_prev, 0..) |_, j0| {
+        for (trackslice_curr, 0..) |_, j1| {
+            const c = link_costs[j0 * n1 + j1];
             if (c != 0.0) continue;
-            if (vert_star_m[i] == .starred) continue;
-            if (vert_star_n[j] == .starred) continue;
+            if (vert_star_prev[j0] == .starred) continue;
+            if (vert_star_curr[j1] == .starred) continue;
 
             // we've found an unstarred zero. star it!
-            link_state[i * n + j] = .starred;
-            vert_star_m[i] = .starred;
-            vert_star_n[j] = .starred;
+            link_state[j0 * n1 + j1] = .starred;
+            vert_star_prev[j0] = .starred;
+            vert_star_curr[j1] = .starred;
         }
     }
 
+    drawMatrix(n0, n1, link_state);
     // Step 3:  Cover each column containing a starred zero.  If K columns are
     // covered, the starred zeros describe a complete set of unique assignments.  In
     // this case, Go to DONE, otherwise, Go to Step 4.
 
     // Iterate over the m vertices that represent columns
-    for (vert_star_m) |v| {
+
+    for (vert_star_prev) |v| {
         if (v != .starred) break;
-        std.debug.print("We have a winner!", .{});
+    } else {
+        print("We have a winner!\n", .{});
         // TODO: Connect children to parents HERE given final assignment matrix.
         return;
     }
+
+    print("We have a loser!\n", .{});
+    if (true) return;
 
     // Step 4: Find a noncovered zero and prime it.  If there is no starred zero in
     // the row containing this primed zero, Go to Step 5.  Otherwise, cover this row
@@ -405,31 +427,35 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // and Go to Step 6.
 
     // do step 4.
-    outer: for (trackslice_prev, 0..) |_, i| {
-        for (trackslice_curr, 0..) |_, j| {
-            const c = link_costs[i * n + j];
+    outer: for (trackslice_prev, 0..) |_, j0| {
+        for (trackslice_curr, 0..) |_, j1| {
+            const c = link_costs[j0 * n1 + j1];
+
+            // try printMunkresState(n, m, link_state);
+            // try printMunkresState(n, m, link_state);
+            // _ = win.?.awaitKeyPress();
 
             // Find a noncovered zero
             if (c != 0.0) continue;
-            if (vert_cover_m[i] != .noncovered) continue;
-            if (vert_cover_n[j] != .noncovered) continue;
+            if (vert_cover_prev[j0] != .noncovered) continue;
+            if (vert_cover_curr[j1] != .noncovered) continue;
 
             // we've found a noncovered zero, so prime it!
-            link_state[i * n + j] = .primed;
+            link_state[j0 * n1 + j1] = .primed;
 
             // now check for stars in that row. if there aren't any then break to step 5.
-            if (vert_star_m[i] != .starred) break :outer;
+            if (vert_star_prev[j0] != .starred) break :outer;
 
             // TODO: since there is never more than one starred zero in a row or column we
             // can just store the r/c index and look it up without searching.
             const column_with_star = blk: {
-                for (0..n) |col| {
-                    if (link_state[i * n + col] == .starred) break :blk col;
+                for (0..n1) |j11| {
+                    if (link_state[j0 * n1 + j11] == .starred) break :blk j11;
                 }
                 unreachable;
             };
-            vert_cover_m[i] = .covered;
-            vert_cover_n[column_with_star] = .noncovered;
+            vert_cover_prev[j0] = .covered;
+            vert_cover_curr[column_with_star] = .noncovered;
 
             // // if there are no uncovered zeros left then break.
             // for (link_costs,0..) |cost, idx| {
@@ -453,6 +479,32 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // Unstar each starred zero of the series, star each primed zero of the series,
     // erase all primes and uncover every line in the matrix. Return to Step 3.
 
+}
+
+pub fn printMunkresState(
+    n: usize,
+    m: usize,
+    link_state: []const LinkState,
+    // vert_cover_m: []const RowColState,
+    // vert_cover_n: []const RowColState,
+    // vert_star_m: []const LinkState,
+    // vert_star_n: []const LinkState
+    // _ = n;,
+) !void {
+    _ = n;
+    for (link_state, 1..) |l, i| {
+        const c = switch (l) {
+            .none => "n",
+            .starred => "*",
+            .primed => "\'",
+        };
+        print("{s}", .{c});
+
+        if (i % m == 0) {
+            print("\n", .{});
+        }
+    }
+    print("\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F", .{});
 }
 
 test "test the munkres tracker" {}
@@ -717,6 +769,7 @@ pub fn main() !void {
     try sdlw.initSDL();
     defer sdlw.quitSDL();
     win = try sdlw.Window.init(1000, 800);
+    win_plot = try sdlw.Window.init(500, 500);
 
     tracer = try Tracer(100).init();
 
@@ -733,19 +786,21 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
     var tracking = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
     var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, 100);
     defer unfinished_lineage_q.deinit();
-    const jumpdist: f32 = 0.015;
 
     // cumulative distribution of events
+    const jumpdist: f32 = 0.015;
     const p_new_lineage: f32 = 0.00;
-    const p_continue: f32 = 0.97 + p_new_lineage;
+    // const p_continue: f32 = 0.97 + p_new_lineage;
+    const p_continue: f32 = 1.0 + p_new_lineage;
     const p_divide: f32 = 0.020 + p_continue;
     const p_death: f32 = 0.010 + p_divide;
     _ = p_death;
 
     // Add ten cells to the starting frame
-    for (0..10) |_| {
-        const cell = .{
-            .pt = .{ random.float(f32), random.float(f32) },
+    for (0..10) |i| {
+        const cell = TrackedCell{
+            .pt = .{ @as(f32, @floatFromInt(i)) / 10.0, 0.1 },
+            // .pt = .{ random.float(f32), random.float(f32) },
             .id = @as(u32, @intCast(tracking.items.len)),
             .time = 0, //random.uintLessThan(u16, 4),
             .parent_id = null,
