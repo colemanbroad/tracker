@@ -339,7 +339,8 @@ pub fn drawCircle(comptime T: type, pic: Img2D(T), x0: i32, y0: i32, _r: i32, va
         const y = y0 + dy;
         if (inbounds(pic, .{ x, y }) and dx * dx + dy * dy <= r * r) {
             const imgigx = @as(u31, @intCast(x)) + pic.nx * @as(u31, @intCast(y));
-            pic.img[imgigx] = blend(pic.img[imgigx], val);
+            // pic.img[imgigx] = blend(pic.img[imgigx], val);
+            pic.img[imgigx] = val; //blend(pic.img[imgigx], val);
         }
     }
 }

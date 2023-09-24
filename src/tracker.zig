@@ -140,8 +140,13 @@ pub const cc = struct {
     });
 };
 
+const blue = .{ 255, 0, 0, 255 };
+const green = .{ 0, 255, 0, 255 };
+const red = .{ 0, 0, 255, 255 };
+const black = .{ 0, 0, 0, 255 };
+
 // Runs assignment over each consecutive pair of pointclouds in time order.
-pub fn trackOverFramePairs(tracking: Tracking) !void {
+pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
 
     // sort by (time, x-coord)
     // this is necessary for
@@ -154,7 +159,15 @@ pub fn trackOverFramePairs(tracking: Tracking) !void {
         }
     }.lt;
 
-    std.sort.heap(TrackedCell, tracking.items, {}, lt);
+    std.sort.heap(TrackedCell, orig_tracking.items, {}, lt);
+
+    // make a copy so we can keep multiple solutions alive at the same time and draw them
+    // on top of each other.
+    const tracking = Tracking{
+        .items = try allocator.alloc(TrackedCell, orig_tracking.items.len),
+    };
+    // TrackedCell is a copyable struct.
+    for (orig_tracking.items, 0..) |x, i| tracking.items[i] = x;
 
     var timebounds = try tracking.getTimeboundsOfSorted(allocator);
     defer timebounds.deinit();
@@ -167,31 +180,42 @@ pub fn trackOverFramePairs(tracking: Tracking) !void {
         const tb_one = if (timebounds.get(tb_idx + 1)) |x| x else break;
         const tb_two = if (timebounds.get(tb_idx + 2)) |x| x else break;
 
+        // print("lengths zero {} one {} two {} \n", .{ trackslice_zero.len, trackslice_one.len, trackslice_two.len });
+        // print("Timebounds zero {[start]} {[stop]}\n", tb_zero);
+        // print("Timebounds one {[start]} {[stop]}\n\n", tb_one);
+        // print("Timebounds two {[start]} {[stop]}\n\n", tb_two);
+
+        // Clear the screen and draw circes at each cell.
+        for (win.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+
+        // const orig_trackslice_zero = orig_tracking.items[tb_zero.start..tb_zero.stop];
+        // _ = orig_trackslice_zero;
+        const orig_trackslice_one = orig_tracking.items[tb_one.start..tb_one.stop];
+        const orig_trackslice_two = orig_tracking.items[tb_two.start..tb_two.stop];
+
+        // try linkFramesGreedy(trackslice_zero, trackslice_one);
+        // try linkFramesGreedy(trackslice_one, trackslice_two);
+        drawLinksToParent(orig_trackslice_one, orig_tracking, red);
+        drawLinksToParent(orig_trackslice_two, orig_tracking, red);
+
         const trackslice_zero = tracking.items[tb_zero.start..tb_zero.stop];
         const trackslice_one = tracking.items[tb_one.start..tb_one.stop];
         const trackslice_two = tracking.items[tb_two.start..tb_two.stop];
 
-        print("lengths zero {} one {} two {} \n", .{ trackslice_zero.len, trackslice_one.len, trackslice_two.len });
-        print("Timebounds zero {[start]} {[stop]}\n", tb_zero);
-        print("Timebounds one {[start]} {[stop]}\n\n", tb_one);
-        print("Timebounds two {[start]} {[stop]}\n\n", tb_two);
+        try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
+        try linkFramesGreedyDumb(trackslice_one, trackslice_two);
 
-        // Clear the screen and draw circes at each cell.
-        for (win.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
-        drawPts(trackslice_zero, .{ 0, 255, 0, 255 });
-        drawPts(trackslice_one, .{ 0, 50, 200, 255 });
-        drawPts(trackslice_two, .{ 200, 50, 0, 255 });
+        drawLinksToParent(trackslice_one, tracking, black);
+        drawLinksToParent(trackslice_two, tracking, black);
 
-        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
-        try linkFramesGreedy(trackslice_zero, trackslice_one);
-        try linkFramesGreedy(trackslice_one, trackslice_two);
-        // try linkFramesMunkes(trackslice_zero, trackslice_one);
-
-        drawLinksToParent(trackslice_one, tracking, .{ 0, 50, 200, 255 });
-        drawLinksToParent(trackslice_two, tracking, .{ 200, 50, 0, 255 });
+        drawPts(trackslice_zero, blue);
+        drawPts(trackslice_one, blue);
+        drawPts(trackslice_two, green);
         win.?.update() catch unreachable;
 
-        // Draw teal lines showing connectionsn
+        // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
+        // try linkFramesMunkes(trackslice_zero, trackslice_one);
+
         if (win) |*w| {
             const key = w.awaitKeyPress();
             switch (key) {
@@ -202,24 +226,14 @@ pub fn trackOverFramePairs(tracking: Tracking) !void {
         } else {
             tb_idx += 1;
         }
-
-        // if (tb_idx < 0) tb_idx = 0;
-        // if (tb_idx == timebounds.len - 1) break;
-
-        // try linkFramesNearestNeib(trackslice_zero, trackslice_one);
-
-        // // Draw red lines for connections
-        // drawLinks(trackslice_one, tracking, .{ 0, 0, 255, 255 });
     }
 }
 
 pub fn drawPts(trackslice: []TrackedCell, color: [4]u8) void {
     if (win) |w| {
         for (trackslice) |p| {
-            const x = @as(i32, @intFromFloat(p.pt[0] * 750 + 25));
-            const y = @as(i32, @intFromFloat(p.pt[1] * 750 + 25));
-            // const y = @floatToInt(i32, @intToFloat(f32, p.time) / 30 * 750 + 25);
-            im.drawCircle([4]u8, w.pix, x, y, 3, color);
+            const p0 = pt2screen(p.pt);
+            im.drawCircle([4]u8, w.pix, p0[0], p0[1], 3, color);
         }
     }
 }
@@ -228,12 +242,10 @@ pub fn drawLinksToParent(trackslice: []TrackedCell, tracking: Tracking, color: [
     if (win) |*w| {
         for (trackslice) |*p| {
             if (p.parent_id) |pid| {
-                const x = @as(i32, @intFromFloat(p.pt[0] * 750 + 25));
-                const y = @as(i32, @intFromFloat(p.pt[1] * 750 + 25));
-                const parent = tracking.getID(pid).?;
-                const x2 = @as(i32, @intFromFloat(parent.pt[0] * 750 + 25));
-                const y2 = @as(i32, @intFromFloat(parent.pt[1] * 750 + 25));
-                im.drawLineInBounds([4]u8, w.pix, x, y, x2, y2, color);
+                const p0 = pt2screen(p.pt);
+                const parent = tracking.getCellFromID(pid).?;
+                const p1 = pt2screen(parent.pt);
+                im.drawLineInBounds([4]u8, w.pix, p0[0], p0[1], p1[0], p1[1], color);
             }
         }
     }
@@ -600,7 +612,7 @@ pub fn linkFramesNearestNeib(trackslice_prev: []const TrackedCell, trackslice_cu
 }
 
 // Assign cells to parents greedily, picking the best parents first, but iterating
-// over cells in a random order.
+// over cells without sorting them first.
 pub fn linkFramesGreedyDumb(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
     const tspan = tracer.start(@src().fn_name);
     defer tspan.stop();
@@ -665,8 +677,7 @@ const Tracking = struct {
 
         // then find time boundaries
         // Can't be longer than this. times are discrete and >= 0.
-        // var timebounds = try a.alloc(TimeCount, tracking[tracking.len - 1].time + 1);
-        // defer allocator.free(timebounds);
+
         var count_cells_per_time = std.AutoArrayHashMap(u16, u32).init(a);
         for (tracking) |cell| {
             const val = if (count_cells_per_time.get(cell.time)) |c| c else 0;
@@ -683,35 +694,9 @@ const Tracking = struct {
             idx_start = idx_stop;
         }
         return time_to_idx;
-
-        // for (timebounds) |*v| {
-        //     v.count = 0;
-        //     v.cum = 0;
-        // }
-
-        // // initialize with the first object
-        // timebounds[0].time = tracking[0].time;
-        // timebounds[0].count += 1;
-        // timebounds[0].cum += 1;
-
-        // // fill up time bounds
-        // {
-        //     var tb_idx: u16 = 0;
-        //     for (1..tracking.len) |tr_idx| {
-        //         if (tracking[tr_idx].time > tracking[tr_idx - 1].time) {
-        //             tb_idx += 1;
-        //             timebounds[tb_idx].time = tracking[tr_idx].time;
-        //             timebounds[tb_idx].cum = timebounds[tb_idx - 1].cum;
-        //         }
-        //         timebounds[tb_idx].count += 1;
-        //         timebounds[tb_idx].cum += 1;
-        //     }
-        // }
-
-        // return timebounds;
     }
 
-    pub fn getID(this: @This(), id: u32) ?TrackedCell {
+    pub fn getCellFromID(this: @This(), id: u32) ?TrackedCell {
         for (this.items) |t| {
             if (t.id == id) return t;
         }
@@ -735,7 +720,7 @@ pub fn main() !void {
 
     tracer = try Tracer(100).init();
 
-    var tracking = try generateTrackingLineage(allocator, 1000);
+    var tracking = try generateTrackingLineage(allocator, 10_000);
     defer allocator.free(tracking.items);
 
     try trackOverFramePairs(tracking);
@@ -747,13 +732,14 @@ pub fn main() !void {
 pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
     var tracking = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
     var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, 100);
-    const jumpdist: f32 = 0.1;
+    defer unfinished_lineage_q.deinit();
+    const jumpdist: f32 = 0.015;
 
     // cumulative distribution of events
     const p_new_lineage: f32 = 0.00;
-    const p_continue: f32 = 0.9 + p_new_lineage;
-    const p_divide: f32 = 0.075 + p_continue;
-    const p_death: f32 = 0.025 + p_divide;
+    const p_continue: f32 = 0.97 + p_new_lineage;
+    const p_divide: f32 = 0.020 + p_continue;
+    const p_death: f32 = 0.010 + p_divide;
     _ = p_death;
 
     // Add ten cells to the starting frame
@@ -764,8 +750,8 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
             .time = 0, //random.uintLessThan(u16, 4),
             .parent_id = null,
         };
-        unfinished_lineage_q.appendAssumeCapacity(cell);
-        tracking.appendAssumeCapacity(cell);
+        try unfinished_lineage_q.append(cell);
+        try tracking.append(cell);
     }
 
     // assert(p_death == 1.0);
@@ -786,25 +772,26 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
                 .time = 0, //random.uintLessThan(u16, 4),
                 .parent_id = null,
             };
-            unfinished_lineage_q.appendAssumeCapacity(cell);
-            tracking.appendAssumeCapacity(cell);
+            try unfinished_lineage_q.append(cell);
+            try tracking.append(cell);
         } else if (rchoice < p_continue) {
             // 80% chance we continue the parent lineage
 
-            const dx = jumpdist * (0.5 - random.float(f32));
-            const dy = jumpdist * (0.5 - random.float(f32));
+            const dx = 0.000 + 3 * jumpdist * (0.5 - random.float(f32));
+            const dy = 0.005 + jumpdist * (0.5 - random.float(f32));
 
             // parent = if (unfinished_lineage_q.popOrNull()) |p| p else continue;
 
             const parent = unfinished_lineage_q.pop();
             const cell = .{
-                .pt = .{ parent.pt[0] + dx, parent.pt[1] + dy },
+                // .pt = .{ parent.pt[0] + dx, parent.pt[1] + dy },
+                .pt = .{ @mod(parent.pt[0] + dx, 1), @mod(parent.pt[1] + dy, 1) },
                 .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
-            unfinished_lineage_q.appendAssumeCapacity(cell);
-            tracking.appendAssumeCapacity(cell);
+            try unfinished_lineage_q.append(cell);
+            try tracking.append(cell);
         } else if (rchoice < p_divide) {
             // 5% chance we divide. pop once, enqueue twice.
             // Daughter cells appear on opposite sides of the mother, equally spaced
@@ -815,25 +802,25 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
 
             // create and enqueue cell 1
             const cell1 = .{
-                .pt = .{ parent.pt[0] + dx, parent.pt[1] + dy },
+                .pt = .{ @mod(parent.pt[0] + dx, 1), @mod(parent.pt[1] + dy, 1) },
                 .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
-            unfinished_lineage_q.appendAssumeCapacity(cell1);
-            tracking.appendAssumeCapacity(cell1);
+            try unfinished_lineage_q.append(cell1);
+            try tracking.append(cell1);
 
             if (tracking.items.len == tracking.capacity) break;
 
             // create and enqueue cell 2
             const cell2 = .{
-                .pt = .{ parent.pt[0] - dx, parent.pt[1] - dy },
+                .pt = .{ @mod(parent.pt[0] - dx, 1), @mod(parent.pt[1] - dy, 1) },
                 .id = @as(u32, @intCast(tracking.items.len)),
                 .time = parent.time + 1,
                 .parent_id = parent.id,
             };
-            unfinished_lineage_q.appendAssumeCapacity(cell2);
-            tracking.appendAssumeCapacity(cell2);
+            try unfinished_lineage_q.append(cell2);
+            try tracking.append(cell2);
         } else {
             // 5% chance the lineage dies
 
