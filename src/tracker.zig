@@ -146,6 +146,8 @@ const green = .{ 0, 255, 0, 255 };
 const red = .{ 0, 0, 255, 255 };
 const black = .{ 0, 0, 0, 255 };
 const white = .{ 255, 255, 255, 255 };
+const gold = .{ 0, 215, 255, 255 };
+const pink = .{ 193, 182, 255, 255 };
 
 // Runs assignment over each consecutive pair of pointclouds in time order.
 pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
@@ -180,7 +182,7 @@ pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
     while (true) {
         const tb_zero = if (timebounds.get(tb_idx + 0)) |x| x else break;
         const tb_one = if (timebounds.get(tb_idx + 1)) |x| x else break;
-        const tb_two = if (timebounds.get(tb_idx + 2)) |x| x else break;
+        // const tb_two = if (timebounds.get(tb_idx + 2)) |x| x else break;
 
         // print("lengths zero {} one {} two {} \n", .{ trackslice_zero.len, trackslice_one.len, trackslice_two.len });
         // print("Timebounds zero {[start]} {[stop]}\n", tb_zero);
@@ -202,19 +204,19 @@ pub fn trackOverFramePairs(orig_tracking: Tracking) !void {
 
         const trackslice_zero = tracking.items[tb_zero.start..tb_zero.stop];
         const trackslice_one = tracking.items[tb_one.start..tb_one.stop];
-        const trackslice_two = tracking.items[tb_two.start..tb_two.stop];
+        // const trackslice_two = tracking.items[tb_two.start..tb_two.stop];
 
         // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
         // try linkFramesGreedyDumb(trackslice_one, trackslice_two);
         try linkFramesMunkes(trackslice_zero, trackslice_one);
-        try linkFramesMunkes(trackslice_one, trackslice_two);
+        // try linkFramesMunkes(trackslice_one, trackslice_two);
         // try linkFramesGreedyDumb(trackslice_zero, trackslice_one);
 
         drawPts(trackslice_zero, blue);
-        drawPts(trackslice_one, blue);
-        drawPts(trackslice_two, green);
+        drawPts(trackslice_one, green);
+        // drawPts(trackslice_two, green);
         drawLinksToParent(trackslice_one, tracking, red);
-        drawLinksToParent(trackslice_two, tracking, red);
+        // drawLinksToParent(trackslice_two, tracking, red);
 
         win.?.update() catch unreachable;
 
@@ -301,24 +303,84 @@ pub fn pairwiseDistances(al: Allocator, comptime T: type, a: []const T, b: []con
 const LinkState = enum { none, starred, primed };
 const RowColState = enum { noncovered, covered };
 
-pub fn drawMatrix(n0: usize, n1: usize, link_state: []const LinkState) void {
-    for (win_plot.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
-    for (0..n0) |j0| {
-        for (0..n1) |j1| {
-            const x0 = 50 + @as(i32, @intCast(j0 * 20));
-            const y0 = 50 + @as(i32, @intCast(j1 * 20));
+// n0
+// n1
+// link_costs
+// min_cost_prev
+// min_cost_curr
+// link_state
+// vert_cover_prev
+// vert_cover_curr
+// vert_star_prev
+// vert_star_curr
 
-            const r = 3;
-            const c = link_state[j0 * n1 + j1];
+pub fn drawMatrix(src: std.builtin.SourceLocation, allstate: anytype) void {
+    print("source line: {any} \n", .{src.line});
+    const a = allstate;
+    for (win_plot.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
+
+    const r = 3;
+
+    for (0..a.n0) |j0| {
+        const x0 = 150 + @as(i32, @intCast(j0 * 20));
+        const y0 = 100;
+
+        const c = a.vert_cover_prev[j0];
+        // const c = a.link_state[j0 * a.n1 + j1];
+        const color: [4]u8 = switch (c) {
+            .covered => .{ 125, 125, 23, 255 },
+            .noncovered => .{ 33, 99, 33, 255 },
+        };
+        im.drawCircle([4]u8, win_plot.?.pix, x0, y0, r, color);
+    }
+
+    for (0..a.n1) |j1| {
+        const x0 = 100;
+        const y0 = 150 + @as(i32, @intCast(j1 * 20));
+
+        const c = a.vert_cover_curr[j1];
+        // const c = a.link_state[j0 * a.n1 + j1];
+        const color: [4]u8 = switch (c) {
+            .covered => .{ 125, 125, 23, 255 },
+            .noncovered => .{ 33, 99, 33, 255 },
+        };
+        im.drawCircle([4]u8, win_plot.?.pix, x0, y0, r, color);
+    }
+
+    for (0..a.n0) |j0| {
+        for (0..a.n1) |j1| {
+            const x0 = 150 + @as(i32, @intCast(j0 * 20));
+            const y0 = 150 + @as(i32, @intCast(j1 * 20));
+
+            const c = a.link_state[j0 * a.n1 + j1];
             const color: [4]u8 = switch (c) {
                 .none => white,
                 .starred => blue,
                 .primed => green,
             };
+
             im.drawCircle([4]u8, win_plot.?.pix, x0, y0, r, color);
+
+            const t0 = a.vert_star_prev[j0] == j1;
+            const t1 = a.vert_star_curr[j1] == j0;
+            if (t0 and t1) {
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 3, gold);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 2, gold);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 1, gold);
+            } else if (t0) {
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 3, pink);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 2, pink);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 1, pink);
+            } else if (t1) {
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 3, red);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 2, red);
+                im.drawCircleOutline(win_plot.?.pix, x0, y0, r + 1, red);
+            }
         }
     }
+
     win_plot.?.update() catch unreachable;
+    _ = win_plot.?.awaitKeyPress();
 }
 
 pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
@@ -336,17 +398,37 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // const k = @min()
 
     var link_costs = try aa.alloc(f32, n0 * n1);
+    var min_cost_prev = try aa.alloc(f32, n0);
+    var min_cost_curr = try aa.alloc(f32, n1);
+    var link_state = try aa.alloc(LinkState, n0 * n1);
+    var vert_cover_prev = try aa.alloc(RowColState, n0);
+    var vert_cover_curr = try aa.alloc(RowColState, n1);
+    var vert_star_prev = try aa.alloc(i32, n0);
+    var vert_star_curr = try aa.alloc(i32, n1);
 
-    // Generate costs
+    const allstate = .{
+        .n0 = n0,
+        .n1 = n1,
+        .link_costs = link_costs,
+        .min_cost_prev = min_cost_prev,
+        .min_cost_curr = min_cost_curr,
+        .link_state = link_state,
+        .vert_cover_prev = vert_cover_prev,
+        .vert_cover_curr = vert_cover_curr,
+        .vert_star_prev = vert_star_prev,
+        .vert_star_curr = vert_star_curr,
+    };
+
+    // Generate costs. The optimal solution minimizes the sum of costs across
+    // all possible assignments.
     for (trackslice_prev, 0..) |v0, j0| {
         for (trackslice_curr, 0..) |v1, j1| {
-            link_costs[j0 * n1 + j1] = distEuclid(Pt, v0.pt, v1.pt);
+            const c = distEuclid(Pt, v0.pt, v1.pt);
+            link_costs[j0 * n1 + j1] = c * c;
         }
     }
 
     // Find min cost for rows and columns. Initialize with largest possible val
-    var min_cost_prev = try aa.alloc(f32, n0);
-    var min_cost_curr = try aa.alloc(f32, n1);
     for (min_cost_prev) |*c| c.* = 1000;
     for (min_cost_curr) |*c| c.* = 1000;
     for (trackslice_prev, 0..) |_, j0| {
@@ -367,147 +449,171 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // Step 2 : Find a zero (Z) in the resulting matrix.  If there is no starred zero
     // in its row or column, star Z. Repeat for each element in the matrix.
     // Go to Step 3.
+    // WARN: so the starred zeros depend on the order we traverse matrix. why doesn't this matter?
 
-    // Everything starts off noncovered
-    var link_state = try aa.alloc(LinkState, n0 * n1);
+    // Vertices start off noncovered. Links start off "none", i.e. unstarred and unprimed.
     for (link_state) |*v| v.* = .none;
 
-    // Link state description over `m` in dim 1
-    var vert_cover_prev = try aa.alloc(RowColState, n0);
     for (vert_cover_prev) |*v| v.* = .noncovered;
-
-    // Link state description over `n` in dim 0
-    var vert_cover_curr = try aa.alloc(RowColState, n1);
     for (vert_cover_curr) |*v| v.* = .noncovered;
 
     // Temp state keeps track of rows and columns where we've found stars
     // during this (greedy) search.
-    var vert_star_prev = try aa.alloc(LinkState, n0);
-    for (vert_star_prev) |*v| v.* = .none; // unknown
-    var vert_star_curr = try aa.alloc(LinkState, n1);
-    for (vert_star_curr) |*v| v.* = .none; // unknown
+    for (vert_star_prev) |*v| v.* = -1;
+    for (vert_star_curr) |*v| v.* = -1;
 
     // do step 2. greedily search through matrix elements and star them.
     for (trackslice_prev, 0..) |_, j0| {
         for (trackslice_curr, 0..) |_, j1| {
             const c = link_costs[j0 * n1 + j1];
             if (c != 0.0) continue;
-            if (vert_star_prev[j0] == .starred) continue;
-            if (vert_star_curr[j1] == .starred) continue;
+            if (vert_star_prev[j0] != -1) continue;
+            if (vert_star_curr[j1] != -1) continue;
 
             // we've found an unstarred zero. star it!
             link_state[j0 * n1 + j1] = .starred;
-            vert_star_prev[j0] = .starred;
-            vert_star_curr[j1] = .starred;
+            vert_star_prev[j0] = @intCast(j1);
+            vert_star_curr[j1] = @intCast(j0);
         }
     }
 
-    drawMatrix(n0, n1, link_state);
-    // Step 3:  Cover each column containing a starred zero.  If K columns are
-    // covered, the starred zeros describe a complete set of unique assignments.  In
-    // this case, Go to DONE, otherwise, Go to Step 4.
+    // Loop beginning with Step 3
+    while (true) {
+        drawMatrix(@src(), allstate);
 
-    // Iterate over the m vertices that represent columns
-
-    for (vert_star_prev) |v| {
-        if (v != .starred) break;
-    } else {
-        print("We have a winner!\n", .{});
-        // TODO: Connect children to parents HERE given final assignment matrix.
-        return;
-    }
-
-    print("We have a loser!\n", .{});
-    if (true) return;
-
-    // Step 4: Find a noncovered zero and prime it.  If there is no starred zero in
-    // the row containing this primed zero, Go to Step 5.  Otherwise, cover this row
-    // and uncover the column containing the starred zero. Continue in this manner
-    // until there are no uncovered zeros left. Save the smallest uncovered value
-    // and Go to Step 6.
-
-    // do step 4.
-    outer: for (trackslice_prev, 0..) |_, j0| {
-        for (trackslice_curr, 0..) |_, j1| {
-            const c = link_costs[j0 * n1 + j1];
-
-            // try printMunkresState(n, m, link_state);
-            // try printMunkresState(n, m, link_state);
-            // _ = win.?.awaitKeyPress();
-
-            // Find a noncovered zero
-            if (c != 0.0) continue;
-            if (vert_cover_prev[j0] != .noncovered) continue;
-            if (vert_cover_curr[j1] != .noncovered) continue;
-
-            // we've found a noncovered zero, so prime it!
-            link_state[j0 * n1 + j1] = .primed;
-
-            // now check for stars in that row. if there aren't any then break to step 5.
-            if (vert_star_prev[j0] != .starred) break :outer;
-
-            // TODO: since there is never more than one starred zero in a row or column we
-            // can just store the r/c index and look it up without searching.
-            const column_with_star = blk: {
-                for (0..n1) |j11| {
-                    if (link_state[j0 * n1 + j11] == .starred) break :blk j11;
-                }
-                unreachable;
-            };
+        // Step 3:  Cover each column containing a starred zero.  If K columns are
+        // covered, the starred zeros describe a complete set of unique assignments.  In
+        // this case, Go to DONE, otherwise, Go to Step 4.
+        var n_covered = @as(u32, 0);
+        for (vert_star_prev, 0..) |v, j0| {
+            if (v == -1) continue;
             vert_cover_prev[j0] = .covered;
-            vert_cover_curr[column_with_star] = .noncovered;
-
-            // // if there are no uncovered zeros left then break.
-            // for (link_costs,0..) |cost, idx| {
-            //     const r = idx // n;
-            // }
-
+            n_covered += 1;
         }
-    } else {
-        // Exited without breaking!
-        unreachable;
+        if (n_covered == vert_cover_prev.len) {
+            print("We have a winner!\n", .{});
+            // TODO: Connect children to parents HERE given final assignment matrix.
+            return;
+        }
+
+        // print("We have a loser!\n", .{});
+        // if (true) return;
+
+        // Step 4: Find a noncovered zero and prime it. If there is no starred zero in
+        // the row containing this primed zero, Go to Step 5.  Otherwise, cover this row
+        // and uncover the column containing the starred zero.
+
+        // Continue in this manner
+        // until there are no uncovered zeros left. Save the smallest uncovered value
+        // and Go to Step 6.
+
+        // TODO: Is single pass enough?
+        var uncovered_primed_zero = @as([2]usize, .{ 99, 99 });
+        step4: while (true) {
+            for (vert_cover_prev, 0..) |v, j0| {
+                drawMatrix(@src(), allstate);
+
+                // Find a noncovered zero and prime it.
+                if (v != .noncovered) continue;
+                const zero_loc = vert_star_prev[j0];
+                if (zero_loc == -1) continue;
+                const j1: usize = @intCast(zero_loc);
+                link_state[j0 * n1 + j1] = .primed;
+
+                drawMatrix(@src(), allstate);
+
+                // If there is no starred zero in the row containing this primed zero, Go to Step 5.
+                if (vert_star_curr[j1] == -1) {
+                    uncovered_primed_zero = .{ j0, j1 };
+                    // munkres_step_5();
+                    break :step4;
+                }
+
+                // Otherwise, cover this row and uncover the column containing the starred zero.
+                vert_cover_curr[j1] = .covered;
+                vert_cover_prev[@intCast(vert_star_curr[j1])] = .noncovered;
+            }
+
+            // Save the smallest uncovered value and go to step 6
+            var smallest_uncovered_val = @as(f32, 1000);
+            var smallest_uncovered_idx = @as([2]usize, .{ 99, 99 });
+            for (0..n0) |j0| {
+                for (0..n1) |j1| {
+                    const c = link_costs[j0 * n1 + j1];
+                    if (vert_cover_prev[j0] == .covered) continue;
+                    if (vert_cover_curr[j1] == .covered) continue;
+                    if (c > smallest_uncovered_val) continue;
+                    smallest_uncovered_val = c;
+                    smallest_uncovered_idx = .{ j0, j1 };
+                }
+            }
+
+            // Step 6: Add the value found in Step 4 to every element of each covered row, and subtract it from every element of
+            // each uncovered column.  Return to Step 4 without altering any stars, primes, or covered lines.
+            for (0..n0) |j0| {
+                for (0..n1) |j1| {
+                    if (vert_cover_prev[j0] == .noncovered) link_costs[j0 * n1 + j1] -= smallest_uncovered_val;
+                    if (vert_cover_curr[j1] == .covered) link_costs[j0 * n1 + j1] += smallest_uncovered_val;
+                }
+            }
+        }
+
+        // Step 5: Construct a series of alternating primed and starred zeros as
+        // follows. Let Z0 represent the uncovered primed zero found in Step 4. Let Z1
+        // denote the starred zero in the column of Z0 (if any). Let Z2 denote the
+        // primed zero in the row of Z1 (there will always be one). Continue until the
+        // series terminates at a primed zero that has no starred zero in its column.
+        // Unstar each starred zero of the series, star each primed zero of the series,
+        // erase all primes and uncover every line in the matrix. Return to Step 3.
+
+        // Let Z0 represent the uncovered primed zero found in Step 4.
+        var j0 = uncovered_primed_zero[0];
+        var j1 = uncovered_primed_zero[1];
+        while (true) {
+            // drawMatrix(@src(), allstate);
+            // star each primed zero of the series
+            link_state[j0 * n1 + j1] = .starred;
+            drawMatrix(@src(), allstate);
+            // Let Z1 denote the starred zero in the column of Z0 (if any).
+            j1 = @intCast(vert_star_prev[j0]);
+            // Continue until the series terminates at a primed zero that has no starred zero in its column.
+            if (j1 == -1) break;
+            // unstar each starred zero of the series
+            link_state[j0 * n1 + j1] = .none;
+            drawMatrix(@src(), allstate);
+            // Let Z2 denote the primed zero in the row of Z1 (there will always be one).
+            j0 = @intCast(vert_star_curr[j1]);
+        }
+
+        // erase all primes and uncover every line in the matrix. Return to Step 3.
+        for (vert_cover_prev) |*v| v.* = .noncovered;
+        for (vert_cover_curr) |*v| v.* = .noncovered;
+
+        // Temp state keeps track of rows and columns where we've found stars
+        // during this (greedy) search.
+        for (vert_star_prev) |*v| v.* = -1;
+        for (vert_star_curr) |*v| v.* = -1;
     }
-
-    // Then we iterate over the edges.
-    // Find the cheapest unassigned edge.
-
-    // Step 5: Construct a series of alternating primed and starred zeros as
-    // follows. Let Z0 represent the uncovered primed zero found in Step 4. Let Z1
-    // denote the starred zero in the column of Z0 (if any). Let Z2 denote the
-    // primed zero in the row of Z1 (there will always be one). Continue until the
-    // series terminates at a primed zero that has no starred zero in its column.
-    // Unstar each starred zero of the series, star each primed zero of the series,
-    // erase all primes and uncover every line in the matrix. Return to Step 3.
-
 }
 
-pub fn printMunkresState(
-    n: usize,
-    m: usize,
-    link_state: []const LinkState,
-    // vert_cover_m: []const RowColState,
-    // vert_cover_n: []const RowColState,
-    // vert_star_m: []const LinkState,
-    // vert_star_n: []const LinkState
-    // _ = n;,
-) !void {
-    _ = n;
+pub fn printMunkresState(n0: usize, n1: usize, link_state: []const LinkState) void {
+    _ = n1;
     for (link_state, 1..) |l, i| {
-        const c = switch (l) {
+        const cab = switch (l) {
             .none => "n",
             .starred => "*",
             .primed => "\'",
         };
-        print("{s}", .{c});
+        print("{s}", .{cab});
 
-        if (i % m == 0) {
+        if (i % n0 == 0) {
             print("\n", .{});
         }
     }
-    print("\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F", .{});
+    // print("\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F\x1B[F", .{});
 }
 
-test "test the munkres tracker" {}
+// test "test the munkres tracker" {}
 
 // Alternative Greedy Linking where division costs are greater for the second child than
 // for the first. This is done by first
