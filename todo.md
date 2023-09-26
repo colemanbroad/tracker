@@ -29,14 +29,15 @@
 -[x] greedy tracking that satisfies constraints
 -[x] greedy strain cost that grows outwards from initial guess
 -[x] make greedy tracking work in 2D/3D
+-[ ] [Hungarian Algorithm / Munkres]
 -[ ] expand `c=c_0 + |dx1-dx0|^2 + |dx2-dx0|^2` and simplify
 
 -[ ] repeat greedy tracking for multiple (all?) initial vertices. combine with median + conflict resolution.
 -[ ] vector median filter to clean up _any_ tracking
 -[ ] Viterbi tracker. Only consider local assignments = small transition matrix.
--[ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
 -[ ] StarryNite tracking
 -[ ] Very Fast StrainCost Tracking
+-[ ] compare grid_hash / knn / d-projection / locality sensitive hashing. NOTE: d-projection hash may work well for cells on surface of ellipsoid.
 
 # Profiling 
 

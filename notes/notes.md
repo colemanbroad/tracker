@@ -405,4 +405,7 @@ of the `Pt` type which we hardcode to be 2.
 
 This is a fools errand. I've implemented a brute force search over permutations. see `tracker.enumeratePermutations()`.
 The combinatorial explosion makes this impossible. Printing out 9! permutations of 9 takes 4 seconds. The same for 10 takes 40s, etc.
- 
+
+ # [Hungarian Algorithm / Munkres]
+
+Found a bug. There shouldn't be any uncovered zeros by the time we hit step 6 but there are! 
