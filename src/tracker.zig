@@ -508,9 +508,9 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         step4and6: while (true) {
             var iter = zero_list.iterator();
 
-            // Step 4: Find a noncovered zero and prime it . If there is no starred zero in
-            // (blue+non-grey -> blue+red) the row containing this primed zero, Go to Step 5.
-            // Otherwise, cover this row (red) and uncover the column containing the starred zero.
+            // Step 4: Find a noncovered zero and prime it. If there is no starred zero in
+            // the row containing this primed zero, Go to Step 5.
+            // Otherwise, cover this row and uncover the column containing the starred zero.
             // Continue in this manner until there are no uncovered zeros left. Save the smallest
             // uncovered value and Go to Step 6.
             while (iter.next()) |j0j1| {
@@ -520,12 +520,16 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
 
                 // Find a noncovered zero and prime it. // blue+non-grey -> blue+red
                 if (vert_cover_prev[j0] != .noncovered) continue;
+                if (vert_cover_curr[j1] != .noncovered) continue;
                 link_state[j0 * n1 + j1] = .primed;
 
                 // If there is no starred zero in the row containing this primed zero, Go to Step 5.
                 const j0_maybe = idxOfZeroInRow(link_state, .starred, n0, n1, j1);
                 if (j0_maybe == -1) {
                     uncovered_primed_zero = .{ j0, j1 };
+                    print("j0 = {} j1 = {}\n", .{ j0, j1 });
+                    drawMatrix(@src(), allstate);
+                    _ = win_plot.?.awaitKeyPress();
                     break :step4and6;
                 }
 
@@ -602,7 +606,7 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
                 j1 = @intCast(j1_maybe);
                 try step5_series.append(.{ j0, j1 });
                 // Let Z2 denote the primed zero in the row of Z1 (there will always be one).
-                j0 = @intCast(idxOfZeroInRow(link_state, .primed, n0, n1, j0));
+                j0 = @intCast(idxOfZeroInRow(link_state, .primed, n0, n1, j1));
             }
         }
 
@@ -618,6 +622,8 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
             }
         }
 
+        drawMatrix(@src(), allstate);
+        _ = win_plot.?.awaitKeyPress();
         // drawMatrix(@src(), allstate);
 
         // erase all primes and uncover every line in the matrix. Return to Step 3.
