@@ -17,6 +17,8 @@ test {
     std.testing.refAllDecls(@This());
 }
 
+// 2D image with access patter idx = x*ny + y
+// i.e. y is the fast-changing variable
 pub fn Img2D(comptime T: type) type {
     return struct {
         const This = @This();
@@ -24,6 +26,14 @@ pub fn Img2D(comptime T: type) type {
         img: []T,
         nx: u32,
         ny: u32,
+
+        pub fn get(this: This, x: usize, y: usize) T {
+            return this.img[x * this.ny + y];
+        }
+
+        pub fn set(this: This, x: usize, y: usize, v: T) void {
+            this.img[x * this.ny + y] = v;
+        }
 
         pub fn init(nx: u32, ny: u32) !This {
             return This{

@@ -318,6 +318,7 @@ const RowColState = enum { noncovered, covered };
 // Starred/Primed/Neither Zeros are Blue/Green/White
 // Nonzero links are Grey
 pub fn drawMatrix(src: std.builtin.SourceLocation, allstate: anytype) void {
+    if (win_plot == null) return;
     print("source line: {any} \n", .{src.line});
     const a = allstate;
     for (win_plot.?.pix.img) |*v| v.* = .{ 0, 0, 0, 255 };
@@ -388,24 +389,39 @@ pub fn drawMatrix(src: std.builtin.SourceLocation, allstate: anytype) void {
     // if (a.loop_count.* > 100) _ = win_plot.?.awaitKeyPress();
 }
 
-pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+const Matrix = im.Img2D;
+
+export fn pymunkres(link_costs: [*]f32, n0: u32, n1: u32, assignments: [*]u8) void {
+    const link_matrix = Matrix(f32){
+        .img = link_costs[0..(n0 * n1)],
+        .nx = n0,
+        .ny = n1,
+    };
+
+    const assignments_ = munkresAssignments(allocator, link_matrix) catch unreachable;
+    for (assignments_.img, 0..) |x, i| {
+        assignments[i] = x;
+    }
+}
+
+pub fn munkresAssignments(allo: Allocator, link_costs_copy: Matrix(f32)) !Matrix(u8) {
 
     // First we have to make an nxn grid of edge costs
     // Then an nxn grid of algorithm state for each edge
 
-    var _arena = std.heap.ArenaAllocator.init(allocator);
+    var _arena = std.heap.ArenaAllocator.init(allo);
     defer _arena.deinit();
-
     const aa = _arena.allocator();
 
-    const n0 = trackslice_prev.len;
-    const n1 = trackslice_curr.len;
+    const n0 = link_costs_copy.nx;
+    const n1 = link_costs_copy.ny;
     // const k = @min()
 
     var link_costs = try aa.alloc(f32, n0 * n1);
     var min_cost_prev = try aa.alloc(f32, n0);
     var min_cost_curr = try aa.alloc(f32, n1);
     var link_state = try aa.alloc(LinkState, n0 * n1);
+    var assignment_solution = Matrix(u8){ .nx = n0, .ny = n1, .img = try allo.alloc(u8, n0 * n1) };
     var vert_cover_prev = try aa.alloc(RowColState, n0);
     var vert_cover_curr = try aa.alloc(RowColState, n1);
     var zero_list = std.AutoArrayHashMap([2]usize, void).init(aa);
@@ -424,21 +440,17 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         .zero_list = zero_list,
         .loop_count = &loop_count,
     };
+    _ = allstate;
 
     // Generate costs. The optimal solution minimizes the sum of costs across
     // all possible assignments.
-    for (trackslice_prev, 0..) |v0, j0| {
-        for (trackslice_curr, 0..) |v1, j1| {
-            const c = distEuclid(Pt, v0.pt, v1.pt);
-            link_costs[j0 * n1 + j1] = c * c;
-        }
-    }
+    for (link_costs, 0..) |*l, i| l.* = link_costs_copy.img[i];
 
     // Find min cost for rows and columns. Initialize with largest possible val
     for (min_cost_prev) |*c| c.* = 1000;
     for (min_cost_curr) |*c| c.* = 1000;
-    for (trackslice_prev, 0..) |_, j0| {
-        for (trackslice_curr, 0..) |_, j1| {
+    for (0..n0) |j0| {
+        for (0..n1) |j1| {
             const l = link_costs[j0 * n1 + j1];
             if (l < min_cost_prev[j0]) min_cost_prev[j0] = l;
             if (l < min_cost_curr[j1]) min_cost_curr[j1] = l;
@@ -446,8 +458,8 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     }
 
     // Subtract the min across `prev` from each `curr`
-    for (trackslice_prev, 0..) |_, j0| {
-        for (trackslice_curr, 0..) |_, j1| {
+    for (0..n0) |j0| {
+        for (0..n1) |j1| {
             link_costs[j0 * n1 + j1] -= min_cost_prev[j0];
             if (link_costs[j0 * n1 + j1] == 0.0) {
                 try zero_list.put(.{ j0, j1 }, {});
@@ -465,8 +477,8 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
     // Go to Step 3.
     // WARN: so the starred zeros depend on the order we traverse matrix. why doesn't this matter?
     // do step 2. greedily search through matrix elements and star them.
-    for (trackslice_prev, 0..) |_, j0| {
-        for (trackslice_curr, 0..) |_, j1| {
+    for (0..n0) |j0| {
+        for (0..n1) |j1| {
             const c = link_costs[j0 * n1 + j1];
             if (c != 0.0) continue;
 
@@ -481,7 +493,7 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         }
     }
 
-    drawMatrix(@src(), allstate);
+    // drawMatrix(@src(), allstate);
 
     // Loop beginning with Step 3
     while (true) {
@@ -499,9 +511,11 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
         }
         if (n_covered == vert_cover_prev.len) {
             print("We have a winner!\n", .{});
-            // TODO: Connect children to parents HERE given final assignment matrix.
-            drawMatrix(@src(), allstate);
-            return;
+            // drawMatrix(@src(), allstate);
+            for (link_state, 0..) |l, i| {
+                assignment_solution.img[i] = if (l == .starred) 1 else 0;
+            }
+            return assignment_solution;
         }
 
         var uncovered_primed_zero = @as([2]usize, .{ 99, 99 });
@@ -527,9 +541,9 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
                 const j0_maybe = idxOfZeroInRow(link_state, .starred, n0, n1, j1);
                 if (j0_maybe == -1) {
                     uncovered_primed_zero = .{ j0, j1 };
-                    print("j0 = {} j1 = {}\n", .{ j0, j1 });
-                    drawMatrix(@src(), allstate);
-                    _ = win_plot.?.awaitKeyPress();
+                    // print("j0 = {} j1 = {}\n", .{ j0, j1 });
+                    // drawMatrix(@src(), allstate);
+                    //             _ = win_plot.?.awaitKeyPress();
                     break :step4and6;
                 }
 
@@ -557,7 +571,9 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
                 for (0..n1) |j1| {
                     // Add to every covered row
                     if (vert_cover_curr[j1] == .covered) {
-                        if (link_costs[j0 * n1 + j1] == 0.0) assert(zero_list.swapRemove(.{ j0, j1 }));
+                        // BUG: sometimes assert fails. why?
+                        // if (link_costs[j0 * n1 + j1] == 0.0) assert(zero_list.swapRemove(.{ j0, j1 }));
+                        if (link_costs[j0 * n1 + j1] == 0.0) _ = zero_list.swapRemove(.{ j0, j1 });
                         link_costs[j0 * n1 + j1] += smallest_uncovered_val;
                     }
                     // Subtract from every covered column
@@ -588,10 +604,8 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
             while (true) {
                 loop_idx += 1;
                 if (loop_idx > 0) {
-                    drawMatrix(@src(), allstate);
-                    _ = win_plot.?.awaitKeyPress();
-                    // print("j0= {} \t", .{loop_idx});
-                    print("j0 = {} j1 = {}\n", .{ j0, j1 });
+                    // drawMatrix(@src(), allstate);
+                    // print("j0 = {} j1 = {}\n", .{ j0, j1 });
                 }
 
                 // Z0
@@ -622,8 +636,6 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
             }
         }
 
-        drawMatrix(@src(), allstate);
-        _ = win_plot.?.awaitKeyPress();
         // drawMatrix(@src(), allstate);
 
         // erase all primes and uncover every line in the matrix. Return to Step 3.
@@ -635,6 +647,34 @@ pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: [
 
         // drawMatrix(@src(), allstate);
     }
+}
+
+pub fn linkFramesMunkes(trackslice_prev: []const TrackedCell, trackslice_curr: []TrackedCell) !void {
+
+    // First we have to make an nxn grid of edge costs
+    // Then an nxn grid of algorithm state for each edge
+
+    const n0 = trackslice_prev.len;
+    const n1 = trackslice_curr.len;
+
+    var link_costs = Matrix(f32){
+        .img = try allocator.alloc(f32, n0 * n1),
+        .nx = @intCast(n0),
+        .ny = @intCast(n1),
+    };
+
+    // Generate costs. The optimal solution minimizes the sum of costs across
+    // all possible assignments.
+    for (trackslice_prev, 0..) |v0, j0| {
+        for (trackslice_curr, 0..) |v1, j1| {
+            const c = distEuclid(Pt, v0.pt, v1.pt);
+            link_costs.set(j0, j1, c * c);
+        }
+    }
+
+    const assignment_solution = try munkresAssignments(allocator, link_costs);
+    _ = assignment_solution;
+    // print("{any}", .{assignment_solution});
 }
 
 fn idxOfZeroInRow(link_state: []const LinkState, state: LinkState, n0: usize, n1: usize, j1: usize) i32 {

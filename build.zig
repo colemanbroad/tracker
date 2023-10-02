@@ -63,8 +63,9 @@ pub fn build(b: *Builder) void {
         .name = "track",
         .root_source_file = .{ .path = "src/tracker.zig" },
         .target = .{},
-        .optimize = .Debug,
+        .optimize = .ReleaseFast,
     });
+    addSDL(lib_tracker);
     // lib_tracker.addAnonymousModule("trace", .{ .source_file = .{ .path = "libs/trace.zig/src/main.zig" } });
     b.installArtifact(lib_tracker);
 
