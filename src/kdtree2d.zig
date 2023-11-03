@@ -9,7 +9,7 @@ var allocator = gpa.allocator();
 var prng = std.rand.DefaultPrng.init(0);
 const random = prng.random();
 
-const Tracer = @import("fn-tracer.zig").Tracer;
+const Tracer = @import("tracelet.zig").Tracer;
 var tracer: Tracer(Ntrials) = undefined;
 
 // Get an SDL window we can use for visualizing algorithms.

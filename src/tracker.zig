@@ -12,7 +12,7 @@ const allocator = gpa.allocator();
 
 // Local imports
 const im = @import("image_base.zig");
-const Tracer = @import("fn-tracer.zig").Tracer;
+const Tracer = @import("tracelet.zig").Tracer;
 var tracer: Tracer(100) = undefined;
 // Get an SDL window we can use for visualizing algorithms.
 const sdlw = @import("sdl-window.zig");
@@ -987,7 +987,7 @@ pub fn main() !void {
 // Generate a simulated lineage with cells, divisions and apoptosis.
 pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
     var tracking = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
-    var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, 100);
+    var unfinished_lineage_q = try std.ArrayList(TrackedCell).initCapacity(a, n_total_cells);
     defer unfinished_lineage_q.deinit();
 
     // cumulative distribution of events
@@ -999,8 +999,8 @@ pub fn generateTrackingLineage(a: Allocator, n_total_cells: u32) !Tracking {
     const p_death: f32 = 0.010 + p_divide;
     _ = p_death;
 
-    // Add ten cells to the starting frame
-    for (0..10) |i| {
+    const n_starting_cells = 30;
+    for (0..n_starting_cells) |i| {
         const cell = TrackedCell{
             .pt = .{ @as(f32, @floatFromInt(i)) / 10.0, 0.1 },
             // .pt = .{ random.float(f32), random.float(f32) },
